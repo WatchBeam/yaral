@@ -1,5 +1,5 @@
 {
-  "name": "yarl",
+  "name": "yaral",
   "version": "1.0.0",
   "description": "Yet Another Rate Limit (plugin for Hapi)",
   "main": "index.js",
@@ -8,20 +8,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WatchBeam/yarl.git"
+    "url": "git+https://github.com/WatchBeam/yaral.git"
   },
   "keywords": [
     "catbox",
     "hapi",
-    "cache",
-    "route"
+    "rate",
+    "limit"
   ],
   "author": "Connor Peet <connor@peet.io>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/WatchBeam/yarl/issues"
+    "url": "https://github.com/WatchBeam/yaral/issues"
   },
-  "homepage": "https://github.com/WatchBeam/yarl#readme",
+  "homepage": "https://github.com/WatchBeam/yaral#readme",
   "devDependencies": {
     "async": "^1.5.2",
     "chai": "^3.4.1",

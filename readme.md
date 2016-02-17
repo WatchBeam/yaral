@@ -1,8 +1,8 @@
-# Yarl
+# Yaral 
 
-[![Build Status](https://img.shields.io/travis/WatchBeam/yarl.svg?style=flat-square)](https://travis-ci.org/WatchBeam/yarl)
+[![Build Status](https://img.shields.io/travis/WatchBeam/yaral.svg?style=flat-square)](https://travis-ci.org/WatchBeam/yaral)
 
-Yarl is Yet Another Rate Limit plugin for Hapi. But, unlike others, it does several nice things!
+Yaral is Yet Another RAte Limit plugin for Hapi. But, unlike others, it does several nice things!
  - Integrates with you server's Catbox cache
  - Allows you to limit with custom attributes, not just the user's IP.
  - Allows you to limit certain responses, add limiting globally, and adjust the limiting endpoint-by-endpoint
@@ -15,7 +15,7 @@ Yarl is Yet Another Rate Limit plugin for Hapi. But, unlike others, it does seve
 
 ### Configuration
 
-The following options are available when you register Yarl:
+The following options are available when you register Yaral:
  - `buckets` is an array of interval config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals. Each item should have:
     - An identifying `name`
     - An `interval` that allows a `max` number of requests.
@@ -27,7 +27,7 @@ The following options are available when you register Yarl:
  - `includeHeaders` specifies whether rate limit headers should be included in the response.
  - `limitus` is a Limitus instance to use for this rate limiting. Defaults to `new Limitus()`.
 
-You can also configure options on a per-route basis in `config.plugins.yarl`:
+You can also configure options on a per-route basis in `config.plugins.yaral`:
  - `buckets` specifies the bucket `name` or array of of the rate limit buckets to use in addition to the configured `default` rules. Buckets are matched first to last.
  - `enabled` is a boolean which allows you to override a true `enabled` global configuration. This can be used to exclude routes from global rate limits. Defaults to `true`.
 

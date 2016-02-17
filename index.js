@@ -1,1 +1,1 @@
-module.exports = require('./lib/yarl.js');
+module.exports = require('./lib/yaral.js');

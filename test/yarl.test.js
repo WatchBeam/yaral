@@ -64,7 +64,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: 'a' },
+                    plugins: { yaral: 'a' },
                     handler: (req, reply) => reply('ok'),
                 },
             });
@@ -76,7 +76,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: ['a'] },
+                    plugins: { yaral: ['a'] },
                     handler: (req, reply) => reply('ok'),
                 },
             });
@@ -88,7 +88,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: { buckets: ['a'] }},
+                    plugins: { yaral: { buckets: ['a'] }},
                     handler: (req, reply) => reply('ok'),
                 },
             });
@@ -101,7 +101,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: ['b', 'a'] },
+                    plugins: { yaral: ['b', 'a'] },
                     handler: (req, reply) => reply(res()),
                 },
             });
@@ -128,7 +128,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: ['a'] },
+                    plugins: { yaral: ['a'] },
                     handler: (req, reply) => reply(res()),
                 },
             });
@@ -168,7 +168,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: ['b'] },
+                    plugins: { yaral: ['b'] },
                     handler: (req, reply) => reply(res()),
                 },
             });
@@ -194,7 +194,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/asdf',
                 config: {
-                    plugins: { yarl: { enabled: false }},
+                    plugins: { yaral: { enabled: false }},
                     handler: (req, reply) => reply('ok'),
                 },
             });
@@ -218,7 +218,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: ['a'] },
+                    plugins: { yaral: ['a'] },
                     handler: (req, reply) => reply('ok'),
                 },
             });
@@ -242,7 +242,7 @@ describe('routebox', function () {
             server.route({
                 method: 'get', path: '/',
                 config: {
-                    plugins: { yarl: ['a'] },
+                    plugins: { yaral: ['a'] },
                     handler: (req, reply) => reply('ok'),
                 },
             });

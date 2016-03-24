@@ -26,9 +26,11 @@ The following options are available when you register Yaral:
  - `enabled` is a boolean whether to enable rate limiting. Useful to disable limiting in tests and development. Default to `true`.
  - `includeHeaders` specifies whether rate limit headers should be included in the response.
  - `limitus` is a Limitus instance to use for this rate limiting. Defaults to `new Limitus()`.
+ - `exclude` is a function, called with the `request` object that returns true if the provided request should be omitted from limiting.
 
 You can also configure options on a per-route basis in `config.plugins.yaral`:
  - `buckets` specifies the bucket `name` or array of of the rate limit buckets to use in addition to the configured `default` rules. Buckets are matched first to last.
  - `enabled` is a boolean which allows you to override a true `enabled` global configuration. This can be used to exclude routes from global rate limits. Defaults to `true`.
+ - `exclude` functions similarly to the `exclude` above. If both a route-level and a global exclude passed, the request will be excluded if _either_ return true.
 
 Alternately, for routes, you can specify a single string or array as a shorthand for buckets.

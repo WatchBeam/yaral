@@ -48,6 +48,7 @@ describe('routebox', function () {
                         { id, name: 'a', interval: 1000, max: 2 },
                         { id, name: 'b', interval: 1500, max: 5, codes: ['4xx'] },
                         { id, name: 'c', interval: 1000, max: 2, codes: ['xxx'] },
+                        { id, name: 'd', interval: 2000, max: 2, mode: 'continuous' },
                     ]
                 }
             }, done);
@@ -149,6 +150,28 @@ describe('routebox', function () {
                 { url: '/?l=a', status: 200, left: 1 },
             ], done);
         });
+
+        it('limits correctly with continuous mode', function (done) {
+            server.route({
+                method: 'get', path: '/',
+                config: {
+                    plugins: { yaral: { buckets: ['d'] }},
+                    handler: (req, reply) => reply('ok'),
+                },
+            });
+
+            testSequence([
+                { url: '/?l=d', status: 200, left: undefined },
+                { url: '/?l=d', status: 200, left: undefined },
+                { url: '/?l=d', status: 429, left: 0 },
+                { url: '/?l=d', status: 429, left: 0, then: () => { clock.tick(1001) } },
+                { url: '/?l=d', status: 200, left: undefined },
+                { url: '/?l=d', status: 429, left: 0, then: () => { clock.tick(2001) }  },
+                { url: '/?l=d', status: 200, left: undefined },
+                { url: '/?l=d', status: 200, left: undefined },
+                { url: '/?l=d', status: 429, left: 0 },
+            ], done);
+        })
     });
 
     describe('global handlers', function () {

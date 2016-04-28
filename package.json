@@ -1,6 +1,6 @@
 {
   "name": "yaral",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Yet Another Rate Limit (plugin for Hapi)",
   "main": "index.js",
   "scripts": {

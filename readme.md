@@ -16,9 +16,10 @@ Yaral is Yet Another RAte Limit plugin for Hapi. But, unlike others, it does sev
 ### Configuration
 
 The following options are available when you register Yaral:
- - `buckets` is an array of interval config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals. Each item should have:
+ - `buckets` is an array of interval/mode config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals. Each item should have:
     - An identifying `name`
     - An `interval` that allows a `max` number of requests.
+    - A `mode` as described in the Limitus documentation. Either `interval` oder `continuous`. Defaults to `interval`.
     - An `id` function that takes a Hapi request object and returns a string, number or object that identifies the requester.
     - A list of `codes` that specify response codes that count towards this bucket's limit. Responses not in this range will not be limited. Defaults to `['2xx', '3xx']`. *Tip:* to limit all responses, use `['xxx']`.
  - `default` is a bucket `name` or array of names of the bucket applied to all routes. Defaults to `[]`. Buckets are matched first to last.

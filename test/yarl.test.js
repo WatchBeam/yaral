@@ -4,6 +4,7 @@ const expect = require('chai').expect;
 const sinon = require('sinon');
 const async = require('async');
 const chalk = require('chalk');
+const yaral = require('../');
 
 describe('routebox', function () {
     var server;
@@ -42,7 +43,7 @@ describe('routebox', function () {
     describe('limiting functionality', function () {
         beforeEach(function (done) {
             server.register({
-                register: require('../'),
+                register: yaral,
                 options: {
                     buckets: [
                         { id, name: 'a', interval: 1000, max: 2 },
@@ -177,7 +178,7 @@ describe('routebox', function () {
     describe('global handlers', function () {
         beforeEach(function (done) {
             server.register({
-                register: require('../'),
+                register: yaral,
                 options: {
                     buckets: [
                         { id, name: 'a', interval: 1000, max: 2 },
@@ -233,7 +234,7 @@ describe('routebox', function () {
 
     it('respects disabled', function (done) {
         server.register({
-            register: require('../'),
+            register: yaral,
             options: {
                 buckets: [
                     { id, name: 'a', interval: 1000, max: 2 },
@@ -257,7 +258,7 @@ describe('routebox', function () {
 
     it('omits headers when requested', function (done) {
         server.register({
-            register: require('../'),
+            register: yaral,
             options: {
                 buckets: [
                     { id, name: 'a', interval: 1000, max: 2 },
@@ -283,7 +284,7 @@ describe('routebox', function () {
 
     it('excludes requests', function (done) {
         server.register({
-            register: require('../'),
+            register: yaral,
             options: {
                 buckets: [
                     { id: () => 42, name: 'a', interval: 1000, max: 2 },
@@ -335,10 +336,13 @@ describe('routebox', function () {
         const onPass = sinon.stub();
         const onLimit = sinon.stub();
         server.register({
-            register: require('../'),
+            register: yaral,
             options: {
                 onPass,
-                onLimit,
+                onLimit: (req) => {
+                    onLimit(req);
+                    return req.query.cancel ? yaral.cancel : null;
+                },
                 buckets: [
                     { id: () => 42, name: 'a', interval: 1000, max: 1 },
                 ],
@@ -366,7 +370,13 @@ describe('routebox', function () {
                     expect(res.statusCode).to.equal(429);
                     expect(onPass.callCount).to.equal(1);
                     expect(onLimit.callCount).to.equal(1);
-                    done();
+
+                    server.inject({ method: 'GET', url: '/a?cancel=true' }, (res) => {
+                        expect(res.statusCode).to.equal(200);
+                        expect(onPass.callCount).to.equal(1);
+                        expect(onLimit.callCount).to.equal(2);
+                        done();
+                    });
                 });
             });
         });

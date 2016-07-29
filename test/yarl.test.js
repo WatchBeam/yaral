@@ -330,4 +330,45 @@ describe('routebox', function () {
             ], done);
         });
     });
+
+    it('runs callback functions', function (done) {
+        const onPass = sinon.stub();
+        const onLimit = sinon.stub();
+        server.register({
+            register: require('../'),
+            options: {
+                onPass,
+                onLimit,
+                buckets: [
+                    { id: () => 42, name: 'a', interval: 1000, max: 1 },
+                ],
+            }
+        }, () => {
+            server.route({
+                method: 'get', path: '/a',
+                config: {
+                    plugins: {
+                        yaral: {
+                            buckets: ['a'],
+                        },
+                    },
+                    handler: (req, reply) => reply('ok'),
+                },
+            });
+
+
+            server.inject({ method: 'GET', url: '/a' }, (res) => {
+                expect(res.statusCode).to.equal(200);
+                expect(onPass.callCount).to.equal(1);
+                expect(onLimit.callCount).to.equal(0);
+
+                server.inject({ method: 'GET', url: '/a' }, (res) => {
+                    expect(res.statusCode).to.equal(429);
+                    expect(onPass.callCount).to.equal(1);
+                    expect(onLimit.callCount).to.equal(1);
+                    done();
+                });
+            });
+        });
+    });
 });

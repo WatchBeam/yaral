@@ -28,6 +28,8 @@ The following options are available when you register Yaral:
  - `includeHeaders` specifies whether rate limit headers should be included in the response.
  - `limitus` is a Limitus instance to use for this rate limiting. Defaults to `new Limitus()`.
  - `exclude` is a function, called with the `request` object that returns true if the provided request should be omitted from limiting.
+ - `onPass` is a function called with the `request` object with a successful request is made which is not rate limited.
+ - `onLimit` is a function called with the `request` object, `rule` name that failed, and extra `data` that rule returns when a request is made which does get rate limited.
 
 You can also configure options on a per-route basis in `config.plugins.yaral`:
  - `buckets` specifies the bucket `name` or array of of the rate limit buckets to use in addition to the configured `default` rules. Buckets are matched first to last.

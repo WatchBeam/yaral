@@ -1,6 +1,6 @@
 # Yaral 
 
-[![Build Status](https://img.shields.io/travis/WatchBeam/yaral.svg?style=flat-square)](https://travis-ci.org/WatchBeam/yaral)
+[![Build Status](https://img.shields.io/travis/mixer/yaral.svg?style=flat-square)](https://travis-ci.org/mixer/yaral)
 
 Yaral is Yet Another RAte Limit plugin for Hapi. But, unlike others, it does several nice things!
  - Integrates with you server's Catbox cache

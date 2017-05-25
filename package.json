@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WatchBeam/yaral.git"
+    "url": "git+https://github.com/mixer/yaral.git"
   },
   "keywords": [
     "catbox",
@@ -19,9 +19,9 @@
   "author": "Connor Peet <connor@peet.io>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/WatchBeam/yaral/issues"
+    "url": "https://github.com/mixer/yaral/issues"
   },
-  "homepage": "https://github.com/WatchBeam/yaral#readme",
+  "homepage": "https://github.com/mixer/yaral#readme",
   "devDependencies": {
     "async": "^2.3.0",
     "chai": "^3.4.1",

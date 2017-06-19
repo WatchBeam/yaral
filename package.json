@@ -2,9 +2,12 @@
   "name": "yaral",
   "version": "1.5.0",
   "description": "Yet Another Rate Limit (plugin for Hapi)",
-  "main": "lib/yaral",
+  "main": "dist/yaral.js",
+  "typings": "dist/yarald.d.ts",
   "scripts": {
-    "test": "mocha test --recursive"
+    "build": "tsc",
+    "test": "mocha --compilers ts:ts-node/register test/yaral.test.js",
+    "prepublish": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -23,16 +26,20 @@
   },
   "homepage": "https://github.com/mixer/yaral#readme",
   "devDependencies": {
-    "async": "^2.3.0",
+    "@types/boom": "^4.3.5",
+    "@types/catbox": "^7.1.1",
+    "@types/hapi": "^16.1.5",
+    "@types/joi": "^10.4.0",
     "chai": "^3.4.1",
     "chalk": "^1.1.1",
-    "eslint": "^1.10.3",
     "hapi": "^16.1.1",
     "mocha": "^3.2.0",
-    "sinon": "^2.1.0"
+    "sinon": "^2.1.0",
+    "ts-node": "^3.0.6",
+    "typescript": "^2.3.4"
   },
   "dependencies": {
-    "boom": "^4.3.1",
+    "boom": "^5.1.0",
     "joi": "^10.4.1",
     "limitus": "^2.2.1"
   }

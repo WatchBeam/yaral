@@ -252,7 +252,7 @@ export const register: PluginFunction<IYaralOptions> = (server: Server, options:
             };
         }), (err: Error, data: any, name: string) => {
             if (!err) {
-                options.onPass(req); // REVIEW: This was missing the argument.
+                options.onPass(req);
                 reply.continue();
                 return;
             }
@@ -263,7 +263,7 @@ export const register: PluginFunction<IYaralOptions> = (server: Server, options:
             if (!(err instanceof Limitus.Rejected)) {
                 server.log(['error', 'ratelimit'], err);
                 reply.continue();
-                return; // REVIEW missing return
+                return;
             }
 
             // Continue the request if onLimit dictates that we cancel limiting.

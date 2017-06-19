@@ -28,13 +28,11 @@ function codeMatches (pattern: string, code: string): boolean {
 export class Bucket {
     private mode: 'interval' | 'continious';
 
-    constructor (private options: IBucketOptions, private limitus: any) {
+    constructor (private options: IBucketOptions, limitus: any) {
         options.codes = options.codes || ['2xx', '3xx'];
 
         Joi.assert(options, schema);
 
-        this.limitus = limitus;
-        this.options = options;
         this.mode = options.mode || 'interval';
 
         limitus.rule(options.name, {

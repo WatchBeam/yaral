@@ -1,5 +1,4 @@
 import { Server } from 'hapi';
-import { PolicyAPI } from 'catbox';
 
 const Limitus = require('limitus');
 

@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "Yet Another Rate Limit (plugin for Hapi)",
   "main": "dist/yaral.js",
-  "typings": "dist/yarald.d.ts",
+  "typings": "dist/yaral.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "mocha --compilers ts:ts-node/register test/yaral.test.js",

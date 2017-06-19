@@ -27,6 +27,7 @@
   "homepage": "https://github.com/mixer/yaral#readme",
   "devDependencies": {
     "@types/boom": "^4.3.5",
+    "@types/catbox": "^7.1.1",
     "@types/hapi": "^16.1.5",
     "@types/joi": "^10.4.0",
     "chai": "^3.4.1",

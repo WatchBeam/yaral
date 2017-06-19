@@ -17,7 +17,8 @@ function transformKey (key: string): { segment: string, id: string } {
 export function build (server: Server, policy: string): any {
     const limitus = new Limitus();
     const cache = server.cache({ cache: policy });
-    // REVIEW: What is this even
+    // Access of internal cache
+    // Using cache directly results in errors.
     const internalCache: PolicyAPI = (<any>cache)._cache;
 
     limitus.extend({

@@ -80,14 +80,14 @@ export class Bucket {
     /**
      * Returns an identifying value for the provided request.
      */
-    identify (req: Request): string | number | object {
+    public identify (req: Request): string | number | object {
         return this.options.id(req);
     }
 
     /**
      * Returns whether this bucket can handle the provided status code.
      */
-    matches (status: number): boolean {
+    public matches (status: number): boolean {
         const target = String(status);
         const codes = this.options.codes;
         for (let i = 0; i < codes.length; i++) {

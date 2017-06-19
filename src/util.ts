@@ -1,13 +1,9 @@
-'use strict';
-
 /**
  * Like async.parallel.
- * @param  {[]Function}   fns
- * @param  {Function} callback
  */
-exports.all = function (fns, callback) {
+export function all (fns: ((cb: (err?: Error) => void) => void)[], callback: (error?: Error, ...args: any[]) => void) {
     let todo = fns.length;
-    const cb = function (err) {
+    const cb = function (err: Error) {
         if (err) {
             todo = -1;
             return callback.apply(this, arguments);

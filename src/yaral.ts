@@ -1,7 +1,7 @@
 const Limitus = require('limitus');
 import { Bucket } from './bucket';
 import { tooManyRequests, Output } from 'boom';
-import {Server, Request, Response, PluginFunction, ServerRequestExtPoints } from 'hapi';
+import { Server, Request, Response, PluginFunction, ServerRequestExtPoints } from 'hapi';
 import * as Joi from 'joi';
 
 import { build as buildLimitus } from './limitus';

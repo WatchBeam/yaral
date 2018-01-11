@@ -1,7 +1,7 @@
 const Limitus = require('limitus');
 import { Bucket } from './bucket';
 import { tooManyRequests, Output } from 'boom';
-import { Server, Request, Response, PluginFunction } from 'hapi';
+import { Server, Request, Response, PluginFunction, ServerRequestExtPoints } from 'hapi';
 import * as Joi from 'joi';
 
 import { build as buildLimitus } from './limitus';
@@ -18,6 +18,7 @@ const schema = Joi.object().keys({
     exclude: Joi.func().required(),
     onLimit: Joi.func().required(),
     onPass: Joi.func().required(),
+    event: Joi.string().valid(["onRequest", "onPreAuth", "onPostAuth"])
 }).required();
 
 declare module 'hapi' {
@@ -130,6 +131,10 @@ export interface IYaralOptions {
      * is an array of interval/mode config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals. Each item should have:
      */
     buckets: IBucketOptions[];
+    /**
+     * A string representing when in the request lifecycle the limit checks should occur
+     */
+    event?: ServerRequestExtPoints;
 }
 
 interface IYaralInternalData {
@@ -146,6 +151,7 @@ export const register: PluginFunction<IYaralOptions> = (server: Server, options:
         exclude: () => false,
         onLimit: () => {},
         onPass: () => {},
+        event: 'onPreAuth',
         ...options
     };
 
@@ -231,7 +237,7 @@ export const register: PluginFunction<IYaralOptions> = (server: Server, options:
     };
 
 
-    server.ext('onPostAuth', (req, reply) => {
+    server.ext(options.event, (req, reply) => {
         const opts = resolveRouteOpts(req);
         if (opts.enabled === false) {
             return reply.continue();

@@ -1,4 +1,5 @@
 const Limitus = require('limitus');
+
 import { Bucket } from './bucket';
 import { tooManyRequests, Output } from 'boom';
 import { Server, Request, Response, PluginFunction, ServerRequestExtPoints } from 'hapi';
@@ -22,6 +23,7 @@ const schema = Joi.object()
     onLimit: Joi.func().required(),
     onPass: Joi.func().required(),
     event: Joi.string().valid(['onRequest', 'onPreAuth', 'onPostAuth']),
+    timeout: Joi.object().optional(),
   })
   .required();
 
@@ -139,6 +141,11 @@ export interface IYaralOptions {
    * A string representing when in the request lifecycle the limit checks should occur
    */
   event?: ServerRequestExtPoints;
+  
+  /** 
+   * JSON object containing redis-connection-timeout settings (enabled, timeout in ms) 
+   */
+  timeout?: any;
 }
 
 interface IYaralInternalData {
@@ -160,6 +167,11 @@ export const register: PluginFunction<IYaralOptions> = (
     onLimit: () => {},
     onPass: () => {},
     event: 'onPreAuth',
+    //Timeout enabled by default with a value of 1000 ms
+    timeout: {
+      enabled: true,
+      timeout: 1000,
+    },
     ...options,
   };
 
@@ -216,7 +228,6 @@ export const register: PluginFunction<IYaralOptions> = (
         !(options.exclude(req) || opts.exclude(req)) &&
         opts.buckets.length + options.default.length > 0;
     }
-
     return opts;
   }
 
@@ -252,6 +263,55 @@ export const register: PluginFunction<IYaralOptions> = (
     }
   };
 
+  class RedisTimeoutError extends Error {}
+
+  //We only need to resolve once which is why we use global redisTimeoutID to track this.
+  let redisTimeoutID: any;
+  const rateLimitResolve = (err: Error, data: any, name: string, req: any, reply: any, info: any) => {
+    if (options.timeout.enabled && redisTimeoutID === null) {
+      return;
+    }
+    clearTimeout(redisTimeoutID);
+    redisTimeoutID = null;
+
+    if (!err) {
+      options.onPass(req);
+      reply.continue();
+      return;
+    }
+
+    //In case there is a redis timeout continue executing
+    if (err instanceof RedisTimeoutError) {      
+      reply.continue();
+      return;
+    }
+
+    // Some internal error occurred. Log an error, but try to
+    // continue; don't bring down the entire site
+    // if there's some issue here!
+    if (!(err instanceof Limitus.Rejected)) {
+      server.log(['error', 'ratelimit'], err);
+      reply.continue();
+      return;
+    }
+
+    // Continue the request if onLimit dictates that we cancel limiting.
+    if (options.onLimit(req, data, name) === cancel) {
+      reply.continue();
+      return;
+    }
+
+    info.limited = true;
+    const res = tooManyRequests();
+    addHeaders(res.output, {
+      'X-RateLimit-Remaining': 0,
+      'X-RateLimit-Reset': data.bucket,
+    });
+
+    reply(res);
+    return;    
+  };
+  
   server.ext(options.event, (req, reply) => {
     const opts = resolveRouteOpts(req);
     if (opts.enabled === false) {
@@ -265,6 +325,11 @@ export const register: PluginFunction<IYaralOptions> = (
     };
     req.plugins.yaral = info;
 
+    if (options.timeout && options.timeout.enabled) {
+      redisTimeoutID = setTimeout(() => {
+        rateLimitResolve(new RedisTimeoutError('Redis Timed Out'), null, null, req, reply, info);
+      }, options.timeout.timeout);
+    }
     return all(
       info.buckets.map((name, i) => {
         return (callback: (err: Error, data?: any, name?: string) => void) => {
@@ -274,39 +339,44 @@ export const register: PluginFunction<IYaralOptions> = (
         };
       }),
       (err: Error, data: any, name: string) => {
-        if (!err) {
-          options.onPass(req);
-          reply.continue();
-          return;
-        }
-
-        // Some internal error occurred. Log an error, but try to
-        // continue; don't bring down the entire site
-        // if there's some issue here!
-        if (!(err instanceof Limitus.Rejected)) {
-          server.log(['error', 'ratelimit'], err);
-          reply.continue();
-          return;
-        }
-
-        // Continue the request if onLimit dictates that we cancel limiting.
-        if (options.onLimit(req, data, name) === cancel) {
-          reply.continue();
-          return;
-        }
-
-        info.limited = true;
-        const res = tooManyRequests();
-        addHeaders(res.output, {
-          'X-RateLimit-Remaining': 0,
-          'X-RateLimit-Reset': data.bucket,
-        });
-
-        reply(res);
-        return;
+        rateLimitResolve(err, data, name, req, reply, info);
       },
     );
   });
+  
+  
+  //We only need to resolve once which is why we use global preResponseTimeoutID to track this.
+  let preResponseTimeoutID: any;
+  const preResponseResolve = (err: Error, data: any, reply: any, opts: any, res: any) => {
+    if (options.timeout.enabled && preResponseTimeoutID === null) {
+      return;
+    }
+    clearTimeout(preResponseTimeoutID);
+    preResponseTimeoutID = null;
+    
+    //In case there is a redis timeout continue executing
+    //did not put it in the same block as Limitus.Rejected for the sake of future logging
+    if (err instanceof RedisTimeoutError) {
+      reply.continue();
+      return;
+    }
+
+    if (err instanceof Limitus.Rejected) {
+      reply.continue(); // this'll be sent on their next request
+      return;
+    }
+
+    if (err) {
+      // Internal errors should not halt everything.
+      reply.continue();
+      server.log(['error', 'ratelimit'], err);
+      return;
+    }
+    
+    addHeaders(res, opts.bucket.headers(data));
+
+    reply.continue();
+  };
 
   server.ext('onPreResponse', (req, reply) => {
     const res = req.response.output || req.response;
@@ -315,22 +385,14 @@ export const register: PluginFunction<IYaralOptions> = (
       return reply.continue();
     }
 
+    if (options.timeout && options.timeout.enabled) {
+      preResponseTimeoutID = setTimeout(() => {
+        preResponseResolve(new RedisTimeoutError('Redis Timed Out'), null, reply, opts, res);
+      }, options.timeout.timeout);
+    }
+
     return limitus.drop(opts.bucket.name(), opts.id, (err: Error, data?: any) => {
-      if (err instanceof Limitus.Rejected) {
-        reply.continue(); // this'll be sent on their next request
-        return;
-      }
-
-      // Internal errors should not halt everything.
-      if (err) {
-        server.log(['error', 'ratelimit'], err);
-        reply.continue();
-        return;
-      }
-
-      addHeaders(res, opts.bucket.headers(data));
-
-      reply.continue();
+      preResponseResolve(err, data, reply, opts, res);
     });
   });
 

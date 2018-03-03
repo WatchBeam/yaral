@@ -6,7 +6,7 @@ import * as Joi from 'joi';
 
 import { build as buildLimitus } from './limitus';
 import { all } from './util';
-import { PluginRegistrationObject } from 'hapi';
+import { PluginRegistrationObject, ReplyWithContinue } from 'hapi';
 
 const schema = Joi.object()
   .keys({
@@ -144,7 +144,7 @@ export interface IYaralOptions {
   /** 
    * JSON object containing redis-connection-timeout settings (enabled, timeout in ms) 
    */
-  timeout?: any;
+  timeout?: { enabled: boolean; timeout: number};
 }
 
 interface IYaralInternalData {
@@ -266,7 +266,7 @@ export const register: PluginFunction<IYaralOptions> = (
 
   //We only need to resolve once which is why we use global redisTimeoutID to track this.
   let redisTimeoutID: any;
-  const rateLimitResolve = (err: Error, data: any, name: string, req: any, reply: any, info: any) => {
+  const rateLimitResolve = (err: Error, data: any, name: string, req: Request, reply: ReplyWithContinue, info: any) => {
     if (options.timeout.enabled && redisTimeoutID === null) {
       return;
     }
@@ -324,7 +324,7 @@ export const register: PluginFunction<IYaralOptions> = (
     };
     req.plugins.yaral = info;
 
-    if (options.timeout && options.timeout.enabled) {
+    if (options.timeout.enabled) {
       redisTimeoutID = setTimeout(() => {
         rateLimitResolve(new RedisTimeoutError('Redis Timed Out'), null, null, req, reply, info);
       }, options.timeout.timeout);
@@ -346,7 +346,7 @@ export const register: PluginFunction<IYaralOptions> = (
   
   //We only need to resolve once which is why we use global preResponseTimeoutID to track this.
   let preResponseTimeoutID: any;
-  const preResponseResolve = (err: Error, data: any, reply: any, opts: any, res: any) => {
+  const preResponseResolve = (err: Error, data: any, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
     if (options.timeout.enabled && preResponseTimeoutID === null) {
       return;
     }
@@ -384,7 +384,7 @@ export const register: PluginFunction<IYaralOptions> = (
       return reply.continue();
     }
 
-    if (options.timeout && options.timeout.enabled) {
+    if (options.timeout.enabled) {
       preResponseTimeoutID = setTimeout(() => {
         preResponseResolve(new RedisTimeoutError('Redis Timed Out'), null, reply, opts, res);
       }, options.timeout.timeout);

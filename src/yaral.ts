@@ -144,7 +144,7 @@ export interface IYaralOptions {
   /** 
    * JSON object containing redis-connection-timeout settings (enabled, timeout in ms) 
    */
-  timeout?: { enabled: boolean; timeout: number};
+  timeout?: { enabled: boolean; timeout: number; ontimeout?: Function};
 }
 
 interface IYaralInternalData {
@@ -166,10 +166,11 @@ export const register: PluginFunction<IYaralOptions> = (
     onLimit: () => {},
     onPass: () => {},
     event: 'onPreAuth',
-    //Timeout enabled by default with a value of 1000 ms
+    //Timeout enabled by default with a value of 1000 ms. On timeout, by default we continue.
     timeout: {
       enabled: true,
       timeout: 1000,
+      ontimeout: (reply: ReplyWithContinue) => reply.continue()
     },
     ...options,
   };
@@ -281,7 +282,7 @@ export const register: PluginFunction<IYaralOptions> = (
 
     //In case there is a redis timeout continue executing
     if (err instanceof RedisTimeoutError) {      
-      reply.continue();
+      options.timeout.ontimeout.call(this, reply);
       return;
     }
 
@@ -356,7 +357,7 @@ export const register: PluginFunction<IYaralOptions> = (
     //In case there is a redis timeout continue executing
     //did not put it in the same block as Limitus.Rejected for the sake of future logging
     if (err instanceof RedisTimeoutError) {
-      reply.continue();
+      options.timeout.ontimeout.call(this, reply);
       return;
     }
 

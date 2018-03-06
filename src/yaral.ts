@@ -265,10 +265,32 @@ export const register: PluginFunction<IYaralOptions> = (
 
   class RedisTimeoutError extends Error {}
 
+  
+  const isTimedOut = (timeoutId: NodeJS.Timer): boolean => {
+    return options.timeout.enabled && timeoutId === null;
+  }
+
+  //Appropriately handles different types of Errors
+  const handleError = (err: Error, reply: ReplyWithContinue) => {
+    //In case there is a redis timeout continue executing
+    //did not put it in the same block as Limitus.Rejected for the sake of future logging
+    if (err instanceof RedisTimeoutError) {
+      options.timeout.ontimeout.call(this, reply);
+      return;
+    }
+
+    if (!(err instanceof Limitus.Rejected)) {
+      server.log(['error', 'ratelimit'], err);
+    }
+
+    // Internal errors should not halt everything.
+    reply.continue();
+  };
+
   //We only need to resolve once which is why we use global redisTimeoutID to track this.
   let redisTimeoutID: any;
   const rateLimitResolve = (err: Error, data: any, name: string, req: Request, reply: ReplyWithContinue, info: any) => {
-    if (options.timeout.enabled && redisTimeoutID === null) {
+    if (isTimedOut(redisTimeoutID)) {
       return;
     }
     clearTimeout(redisTimeoutID);
@@ -280,18 +302,9 @@ export const register: PluginFunction<IYaralOptions> = (
       return;
     }
 
-    //In case there is a redis timeout continue executing
-    if (err instanceof RedisTimeoutError) {      
-      options.timeout.ontimeout.call(this, reply);
-      return;
-    }
-
-    // Some internal error occurred. Log an error, but try to
-    // continue; don't bring down the entire site
-    // if there's some issue here!
+    //Internal Error or RedisTimeout Error
     if (!(err instanceof Limitus.Rejected)) {
-      server.log(['error', 'ratelimit'], err);
-      reply.continue();
+      handleError(err, reply);
       return;
     }
 
@@ -344,37 +357,22 @@ export const register: PluginFunction<IYaralOptions> = (
     );
   });
   
-  
+
   //We only need to resolve once which is why we use global preResponseTimeoutID to track this.
-  let preResponseTimeoutID: any;
+  let preResponseTimeoutID: NodeJS.Timer;
   const preResponseResolve = (err: Error, data: any, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
-    if (options.timeout.enabled && preResponseTimeoutID === null) {
+    if (isTimedOut(preResponseTimeoutID)) {
       return;
     }
     clearTimeout(preResponseTimeoutID);
     preResponseTimeoutID = null;
-    
-    //In case there is a redis timeout continue executing
-    //did not put it in the same block as Limitus.Rejected for the sake of future logging
-    if (err instanceof RedisTimeoutError) {
-      options.timeout.ontimeout.call(this, reply);
-      return;
-    }
-
-    if (err instanceof Limitus.Rejected) {
-      reply.continue(); // this'll be sent on their next request
-      return;
-    }
 
     if (err) {
-      // Internal errors should not halt everything.
-      reply.continue();
-      server.log(['error', 'ratelimit'], err);
+      handleError(err, reply);
       return;
     }
     
     addHeaders(res, opts.bucket.headers(data));
-
     reply.continue();
   };
 

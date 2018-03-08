@@ -144,7 +144,7 @@ export interface IYaralOptions {
   /** 
    * JSON object containing redis-connection-timeout settings (enabled, timeout in ms) 
    */
-  timeout?: { enabled: boolean; timeout: number; ontimeout?: Function};
+  timeout?: { enabled: boolean; timeout: number; ontimeout?: (reply: ReplyWithContinue) => void};
 }
 
 interface IYaralInternalData {
@@ -263,18 +263,33 @@ export const register: PluginFunction<IYaralOptions> = (
     }
   };
 
-  class RedisTimeoutError extends Error {}
+  class TimeoutError extends Error {}
 
-  
-  const isTimedOut = (timeoutId: NodeJS.Timer): boolean => {
-    return options.timeout.enabled && timeoutId === null;
-  }
+  const createTimeout = (callback: ((err: Error, data: any) => void)) => {
+    if (!options.timeout.enabled) {
+      return callback;
+    }
+
+    let timeout = setTimeout(() => {
+      // handle the request timeout
+      callback(new TimeoutError('Call Timed Out'), null);
+      timeout = null;
+    }, options.timeout.timeout);
+
+    return (err: Error, data?: any) => {
+      clearTimeout(timeout);
+      if (timeout !== null) {
+        callback(err, data);
+        timeout = null;
+      }
+    };
+  };
 
   //Appropriately handles different types of Errors
   const handleError = (err: Error, reply: ReplyWithContinue) => {
     //In case there is a redis timeout continue executing
     //did not put it in the same block as Limitus.Rejected for the sake of future logging
-    if (err instanceof RedisTimeoutError) {
+    if (err instanceof TimeoutError) {
       options.timeout.ontimeout.call(this, reply);
       return;
     }
@@ -287,22 +302,14 @@ export const register: PluginFunction<IYaralOptions> = (
     reply.continue();
   };
 
-  //We only need to resolve once which is why we use global redisTimeoutID to track this.
-  let redisTimeoutID: any;
   const rateLimitResolve = (err: Error, data: any, name: string, req: Request, reply: ReplyWithContinue, info: any) => {
-    if (isTimedOut(redisTimeoutID)) {
-      return;
-    }
-    clearTimeout(redisTimeoutID);
-    redisTimeoutID = null;
-
     if (!err) {
       options.onPass(req);
       reply.continue();
       return;
     }
 
-    //Internal Error or RedisTimeout Error
+    //Internal Error or Timeout Error
     if (!(err instanceof Limitus.Rejected)) {
       handleError(err, reply);
       return;
@@ -338,17 +345,12 @@ export const register: PluginFunction<IYaralOptions> = (
     };
     req.plugins.yaral = info;
 
-    if (options.timeout.enabled) {
-      redisTimeoutID = setTimeout(() => {
-        rateLimitResolve(new RedisTimeoutError('Redis Timed Out'), null, null, req, reply, info);
-      }, options.timeout.timeout);
-    }
     return all(
       info.buckets.map((name, i) => {
         return (callback: (err: Error, data?: any, name?: string) => void) => {
-          limitus.checkLimited(name, info.ids[i], (err: Error, data: any) => {
+          limitus.checkLimited(name, info.ids[i], createTimeout((err: Error, data: any) => {
             callback(err, data, name);
-          });
+          }));
         };
       }),
       (err: Error, data: any, name: string) => {
@@ -358,15 +360,7 @@ export const register: PluginFunction<IYaralOptions> = (
   });
   
 
-  //We only need to resolve once which is why we use global preResponseTimeoutID to track this.
-  let preResponseTimeoutID: NodeJS.Timer;
   const preResponseResolve = (err: Error, data: any, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
-    if (isTimedOut(preResponseTimeoutID)) {
-      return;
-    }
-    clearTimeout(preResponseTimeoutID);
-    preResponseTimeoutID = null;
-
     if (err) {
       handleError(err, reply);
       return;
@@ -383,15 +377,9 @@ export const register: PluginFunction<IYaralOptions> = (
       return reply.continue();
     }
 
-    if (options.timeout.enabled) {
-      preResponseTimeoutID = setTimeout(() => {
-        preResponseResolve(new RedisTimeoutError('Redis Timed Out'), null, reply, opts, res);
-      }, options.timeout.timeout);
-    }
-
-    return limitus.drop(opts.bucket.name(), opts.id, (err: Error, data?: any) => {
+    return limitus.drop(opts.bucket.name(), opts.id, createTimeout((err: Error, data?: any) => {
       preResponseResolve(err, data, reply, opts, res);
-    });
+    }));
   });
 
   next();

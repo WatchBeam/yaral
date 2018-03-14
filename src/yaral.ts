@@ -290,9 +290,9 @@ export const register: PluginFunction<IYaralOptions> = (
 
     return (err: Error, data?: any) => {
       clearTimeout(timeout);
-      let isTimedout = timeout === null;
+      const isTimedout = timeout === null;
       //Only log non timed-out requests if timeout is enabled. And even when timed out, still log when call actually resolves
-      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, isTimedout, new Date().getTime() - startTime));
+      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, isTimedout, Date.now() - startTime));
       if (!isTimedout) {
         callback(err, data);
         timeout = null;
@@ -362,7 +362,7 @@ export const register: PluginFunction<IYaralOptions> = (
     };
     req.plugins.yaral = info;
 
-    const startTime = new Date().getTime();
+    const startTime = Date.now();
     return all(
       info.buckets.map((name, i) => {
         return (callback: (err: Error, data?: any, name?: string) => void) => {
@@ -395,7 +395,7 @@ export const register: PluginFunction<IYaralOptions> = (
       return reply.continue();
     }
 
-    const startTime = new Date().getTime();
+    const startTime = Date.now();
     return limitus.drop(opts.bucket.name(), opts.id, createTimeout(req, (err: Error, data?: any) => {
       preResponseResolve(err, data, req, reply, opts, res);
     }, startTime));

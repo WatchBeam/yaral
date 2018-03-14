@@ -262,10 +262,22 @@ export const register: PluginFunction<IYaralOptions> = (
       Object.assign(res.headers, headers);
     }
   };
-
+  
   class TimeoutError extends Error {}
-
-  const createTimeout = (callback: ((err: Error, data: any) => void)) => {
+  
+  const getRequestLogDetails = (err: Error, req: Request, isTimedout: boolean, duration: number) => {
+    return {
+      url: req.url.href || '',
+      duration: duration,
+      success: !err,
+      properties: {
+        error: err? err.toString() : '',
+        isTimedout: isTimedout,
+      },
+    };
+  };
+  
+  const createTimeout = (req: Request, callback: ((err: Error, data: any) => void), startTime: number) => {
     if (!options.timeout.enabled) {
       return callback;
     }
@@ -278,7 +290,10 @@ export const register: PluginFunction<IYaralOptions> = (
 
     return (err: Error, data?: any) => {
       clearTimeout(timeout);
-      if (timeout !== null) {
+      let isTimedout = timeout === null;
+      //Only log non timed-out requests if timeout is enabled. And even when timed out, still log when call actually resolves
+      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, isTimedout, new Date().getTime() - startTime));
+      if (!isTimedout) {
         callback(err, data);
         timeout = null;
       }
@@ -286,11 +301,12 @@ export const register: PluginFunction<IYaralOptions> = (
   };
 
   //Appropriately handles different types of Errors
-  const handleError = (err: Error, reply: ReplyWithContinue) => {
+  const handleError = (err: Error, req: Request, reply: ReplyWithContinue) => {
     //In case there is a redis timeout continue executing
     //did not put it in the same block as Limitus.Rejected for the sake of future logging
     if (err instanceof TimeoutError) {
       options.timeout.ontimeout.call(this, reply);
+      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, true, options.timeout.timeout));
       return;
     }
 
@@ -302,6 +318,7 @@ export const register: PluginFunction<IYaralOptions> = (
     reply.continue();
   };
 
+
   const rateLimitResolve = (err: Error, data: any, name: string, req: Request, reply: ReplyWithContinue, info: any) => {
     if (!err) {
       options.onPass(req);
@@ -311,7 +328,7 @@ export const register: PluginFunction<IYaralOptions> = (
 
     //Internal Error or Timeout Error
     if (!(err instanceof Limitus.Rejected)) {
-      handleError(err, reply);
+      handleError(err, req, reply);
       return;
     }
 
@@ -345,12 +362,13 @@ export const register: PluginFunction<IYaralOptions> = (
     };
     req.plugins.yaral = info;
 
+    const startTime = new Date().getTime();
     return all(
       info.buckets.map((name, i) => {
         return (callback: (err: Error, data?: any, name?: string) => void) => {
-          limitus.checkLimited(name, info.ids[i], createTimeout((err: Error, data: any) => {
+          limitus.checkLimited(name, info.ids[i], createTimeout(req, (err: Error, data: any) => {
             callback(err, data, name);
-          }));
+          }, startTime));
         };
       }),
       (err: Error, data: any, name: string) => {
@@ -360,9 +378,9 @@ export const register: PluginFunction<IYaralOptions> = (
   });
   
 
-  const preResponseResolve = (err: Error, data: any, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
+  const preResponseResolve = (err: Error, data: any, req: Request, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
     if (err) {
-      handleError(err, reply);
+      handleError(err, req, reply);
       return;
     }
     
@@ -377,9 +395,10 @@ export const register: PluginFunction<IYaralOptions> = (
       return reply.continue();
     }
 
-    return limitus.drop(opts.bucket.name(), opts.id, createTimeout((err: Error, data?: any) => {
-      preResponseResolve(err, data, reply, opts, res);
-    }));
+    const startTime = new Date().getTime();
+    return limitus.drop(opts.bucket.name(), opts.id, createTimeout(req, (err: Error, data?: any) => {
+      preResponseResolve(err, data, req, reply, opts, res);
+    }, startTime));
   });
 
   next();

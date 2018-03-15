@@ -271,13 +271,13 @@ export const register: PluginFunction<IYaralOptions> = (
       duration: duration,
       success: !err,
       properties: {
-        error: err? err.toString() : '',
+        error: err? err.stack : '',
         isTimedout: isTimedout,
       },
     };
   };
   
-  const createTimeout = (req: Request, callback: ((err: Error, data: any) => void), startTime: number) => {
+  const createTimeout = (req: Request, callback: ((err: Error, data: any) => void)) => {
     if (!options.timeout.enabled) {
       return callback;
     }
@@ -288,6 +288,7 @@ export const register: PluginFunction<IYaralOptions> = (
       timeout = null;
     }, options.timeout.timeout);
 
+    const startTime = Date.now();
     return (err: Error, data?: any) => {
       clearTimeout(timeout);
       const isTimedout = timeout === null;
@@ -362,13 +363,12 @@ export const register: PluginFunction<IYaralOptions> = (
     };
     req.plugins.yaral = info;
 
-    const startTime = Date.now();
     return all(
       info.buckets.map((name, i) => {
         return (callback: (err: Error, data?: any, name?: string) => void) => {
           limitus.checkLimited(name, info.ids[i], createTimeout(req, (err: Error, data: any) => {
             callback(err, data, name);
-          }, startTime));
+          }));
         };
       }),
       (err: Error, data: any, name: string) => {
@@ -395,10 +395,9 @@ export const register: PluginFunction<IYaralOptions> = (
       return reply.continue();
     }
 
-    const startTime = Date.now();
     return limitus.drop(opts.bucket.name(), opts.id, createTimeout(req, (err: Error, data?: any) => {
       preResponseResolve(err, data, req, reply, opts, res);
-    }, startTime));
+    }));
   });
 
   next();

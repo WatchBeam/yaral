@@ -267,6 +267,7 @@ export const register: PluginFunction<IYaralOptions> = (
   
   const getRequestLogDetails = (err: Error, req: Request, isTimedout: boolean, duration: number) => {
     return {
+      name: 'yaral-timeout',
       url: req.url.href || '',
       duration: duration,
       success: !err,

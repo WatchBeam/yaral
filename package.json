@@ -8,7 +8,8 @@
     "build": "tsc",
     "test": "mocha --compilers ts:ts-node/register test/yaral.test.js",
     "fmt": "prettier --single-quote --trailing-comma all --parser typescript --print-width 100 --write \"src/**/*.ts\" && prettier --single-quote --print-width 100 --write test/yaral.test.js",
-    "prepublish": "npm run build"
+    "prepublish": "npm run build",
+    "lint:ts": "tslint -t verbose -p tsconfig.json"
   },
   "repository": {
     "type": "git",
@@ -38,7 +39,10 @@
     "prettier": "^1.10.2",
     "sinon": "^2.1.0",
     "ts-node": "^3.0.6",
-    "typescript": "^2.3.4"
+    "typescript": "^2.3.4",
+    "tslint": "^5.9.1",
+    "catbox": "^7.1.1",
+    "tslint-microsoft-contrib": "^5.0.3"
   },
   "dependencies": {
     "boom": "^5.1.0",

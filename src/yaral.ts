@@ -1,12 +1,10 @@
 const Limitus = require('limitus');
-import { Bucket } from './bucket';
-import { tooManyRequests, Output } from 'boom';
-import { Server, Request, Response, PluginFunction, ServerRequestExtPoints } from 'hapi';
+import { Output, tooManyRequests } from 'boom';
+import { PluginFunction, PluginRegistrationObject, ReplyWithContinue, Request, Response, Server, ServerRequestExtPoints } from 'hapi';
 import * as Joi from 'joi';
-
+import { Bucket } from './bucket';
 import { build as buildLimitus } from './limitus';
 import { all } from './util';
-import { PluginRegistrationObject, ReplyWithContinue } from 'hapi';
 
 const schema = Joi.object()
   .keys({
@@ -127,22 +125,24 @@ export interface IYaralOptions {
   onPass?(req: Request): void;
 
   /**
-   * A function called with the `request` object, `rule` name that failed, and extra `data` that rule returns when a request is made which does get rate limited.
+   * A function called with the `request` object, `rule` name that failed, and extra `data` that rule
+   * returns when a request is made which does get rate limited.
    * You may return `yaral.cancel` from this method to cause the specific request not to be rate limited.
    */
   onLimit?(req: Request, data: any, name: string): Symbol | void;
 
   /**
-   * is an array of interval/mode config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals. Each item should have:
+   * is an array of interval/mode config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals.
+   * Each item should have:
    */
   buckets: IBucketOptions[];
   /**
    * A string representing when in the request lifecycle the limit checks should occur
    */
   event?: ServerRequestExtPoints;
-  
-  /** 
-   * JSON object containing redis-connection-timeout settings (enabled, timeout in ms) 
+
+  /**
+   * JSON object containing redis-connection-timeout settings (enabled, timeout in ms)
    */
   timeout?: { enabled: boolean; timeout: number; ontimeout?: (reply: ReplyWithContinue) => void};
 }
@@ -163,14 +163,14 @@ export const register: PluginFunction<IYaralOptions> = (
     includeHeaders: true,
     default: [],
     exclude: () => false,
-    onLimit: () => {},
-    onPass: () => {},
+    onLimit: () => {/*do nothing*/},
+    onPass: () => {/*do nothing*/},
     event: 'onPreAuth',
     //Timeout enabled by default with a value of 1000 ms. On timeout, by default we continue.
     timeout: {
       enabled: true,
       timeout: 1000,
-      ontimeout: (reply: ReplyWithContinue) => reply.continue()
+      ontimeout: (reply: ReplyWithContinue) => reply.continue(),
     },
     ...options,
   };
@@ -265,7 +265,20 @@ export const register: PluginFunction<IYaralOptions> = (
 
   class TimeoutError extends Error {}
 
-  const createTimeout = (callback: ((err: Error, data: any) => void)) => {
+  const getRequestLogDetails = (err: Error, req: Request, isTimedout: boolean, duration: number) => {
+    return {
+      name: 'yaral-timeout',
+      url: req.url.href || '',
+      duration: duration,
+      success: !err,
+      properties: {
+        error: err ? err.stack : '',
+        isTimedout: isTimedout,
+      },
+    };
+  };
+
+  const createTimeout = (req: Request, callback: ((err: Error, data: any) => void)) => {
     if (!options.timeout.enabled) {
       return callback;
     }
@@ -276,9 +289,13 @@ export const register: PluginFunction<IYaralOptions> = (
       timeout = null;
     }, options.timeout.timeout);
 
+    const startTime = Date.now();
     return (err: Error, data?: any) => {
       clearTimeout(timeout);
-      if (timeout !== null) {
+      const isTimedout = timeout === null;
+      //Only log non timed-out requests if timeout is enabled. And even when timed out, still log when call actually resolves
+      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, isTimedout, Date.now() - startTime));
+      if (!isTimedout) {
         callback(err, data);
         timeout = null;
       }
@@ -286,11 +303,12 @@ export const register: PluginFunction<IYaralOptions> = (
   };
 
   //Appropriately handles different types of Errors
-  const handleError = (err: Error, reply: ReplyWithContinue) => {
+  const handleError = (err: Error, req: Request, reply: ReplyWithContinue) => {
     //In case there is a redis timeout continue executing
     //did not put it in the same block as Limitus.Rejected for the sake of future logging
     if (err instanceof TimeoutError) {
       options.timeout.ontimeout.call(this, reply);
+      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, true, options.timeout.timeout));
       return;
     }
 
@@ -311,7 +329,7 @@ export const register: PluginFunction<IYaralOptions> = (
 
     //Internal Error or Timeout Error
     if (!(err instanceof Limitus.Rejected)) {
-      handleError(err, reply);
+      handleError(err, req, reply);
       return;
     }
 
@@ -329,9 +347,9 @@ export const register: PluginFunction<IYaralOptions> = (
     });
 
     reply(res);
-    return;    
+    return;
   };
-  
+
   server.ext(options.event, (req, reply) => {
     const opts = resolveRouteOpts(req);
     if (opts.enabled === false) {
@@ -348,7 +366,7 @@ export const register: PluginFunction<IYaralOptions> = (
     return all(
       info.buckets.map((name, i) => {
         return (callback: (err: Error, data?: any, name?: string) => void) => {
-          limitus.checkLimited(name, info.ids[i], createTimeout((err: Error, data: any) => {
+          limitus.checkLimited(name, info.ids[i], createTimeout(req, (err: Error, data: any) => {
             callback(err, data, name);
           }));
         };
@@ -358,14 +376,13 @@ export const register: PluginFunction<IYaralOptions> = (
       },
     );
   });
-  
 
-  const preResponseResolve = (err: Error, data: any, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
+  const preResponseResolve = (err: Error, data: any, req: Request, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
     if (err) {
-      handleError(err, reply);
+      handleError(err, req, reply);
       return;
     }
-    
+
     addHeaders(res, opts.bucket.headers(data));
     reply.continue();
   };
@@ -377,8 +394,8 @@ export const register: PluginFunction<IYaralOptions> = (
       return reply.continue();
     }
 
-    return limitus.drop(opts.bucket.name(), opts.id, createTimeout((err: Error, data?: any) => {
-      preResponseResolve(err, data, reply, opts, res);
+    return limitus.drop(opts.bucket.name(), opts.id, createTimeout(req, (err: Error, data?: any) => {
+      preResponseResolve(err, data, req, reply, opts, res);
     }));
   });
 

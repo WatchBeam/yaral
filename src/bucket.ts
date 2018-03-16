@@ -1,6 +1,6 @@
-import { IBucketOptions } from './yaral';
-import * as Joi from 'joi';
 import { Request } from 'hapi';
+import * as Joi from 'joi';
+import { IBucketOptions } from './yaral';
 
 const schema = Joi.object().keys({
   name: Joi.string().required(),

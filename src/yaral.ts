@@ -82,7 +82,7 @@ export interface IBucketOptions {
    * A `mode` as described in the Limitus documentation.
    * Defaults to `interval`.
    */
-  mode: 'interval' | 'continious';
+  mode: 'continuous' | 'interval';
   /**
    * Function that takes a Hapi request object and returns a string, number or object that identifies the requester.
    */
@@ -140,7 +140,7 @@ export interface IYaralOptions {
    * returns when a request is made which does get rate limited.
    * You may return `yaral.cancel` from this method to cause the specific request not to be rate limited.
    */
-  onLimit?(req: Request, data: any, name: string): Symbol | void;
+  onLimit?(req: Request, data: Limitus.DropInfo, name: string): Symbol | void;
 
   /**
    * is an array of interval/mode config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals.

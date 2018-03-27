@@ -21,7 +21,7 @@ export function build(server: Server, policy: string): Limitus {
   const internalCache: PolicyAPI = (<any>cache)._cache;
 
   limitusInstance.extend({
-    async set(key: any, value: any, expiration: any, callback: any) {
+    async set(key, value, expiration, callback) {
       try {
         await internalCache.set(transformKey(key), value, expiration);
         callback(null);
@@ -29,7 +29,7 @@ export function build(server: Server, policy: string): Limitus {
         callback(e);
       }
     },
-    async get(key: any, callback: any) {
+    async get(key, callback) {
       try {
         const res = await internalCache.get(transformKey(key));
         callback(null, res && (<any>res).item);

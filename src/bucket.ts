@@ -58,10 +58,7 @@ export class Bucket {
    * used to insert information about the limit into the response.
    * @param [data] from limitus.drop's callback
    */
-  public headers(data: {
-    bucket: number | string;
-    count: number;
-  }): {
+  public headers(data: Limitus.DropInfo): {
     [key: string]: string | number;
   } {
     const headers: {

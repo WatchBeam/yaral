@@ -1,17 +1,16 @@
-const Hapi = require('hapi');
+import { Server } from 'hapi';
 const Boom = require('boom');
 const expect = require('chai').expect;
 const sinon = require('sinon');
 const chalk = require('chalk');
-const { yaral, cancel } = require('../src/yaral.ts');
+const { plugin, cancel } = require('../src/yaral');
 
-describe('routebox', function() {
-  let server;
+describe('routebox', () => {
+  let server: Server;
   let clock;
   beforeEach(() => {
     clock = sinon.useFakeTimers();
-    server = new Hapi.Server();
-    server.connection();
+    server = new Server();
     return server.start();
   });
 
@@ -25,11 +24,12 @@ describe('routebox', function() {
   const testSequence = data => {
     let chain = Promise.resolve();
     data.forEach(d => {
-      chain = chain.then(() => server.inject({ method: 'GET', url: d.url })).then(res => {
+      chain = chain.then(() => server.inject({ app: {}, method: 'GET', url: d.url })).then(res => {
+        // tslint:disable-next-line:no-console
         console.log(
           '\t ' +
             chalk.blue('<-') +
-            chalk.gray(` ${res.statusCode}, remaining: ${res.headers['x-ratelimit-remaining']}`)
+            chalk.gray(` ${res.statusCode}, remaining: ${res.headers['x-ratelimit-remaining']}`),
         );
         expect(res.statusCode).to.equal(d.status);
         expect(res.headers['x-ratelimit-remaining']).to.equal(d.left);
@@ -44,15 +44,15 @@ describe('routebox', function() {
   describe('limiting functionality', () => {
     beforeEach(() => {
       return server.register({
-        register: yaral,
+        plugin,
         options: {
           buckets: [
             { id, name: 'a', interval: 1000, max: 2 },
             { id, name: 'b', interval: 1500, max: 5, codes: ['4xx'] },
             { id, name: 'c', interval: 1000, max: 2, codes: ['xxx'] },
-            { id, name: 'd', interval: 2000, max: 2, mode: 'continuous' }
-          ]
-        }
+            { id, name: 'd', interval: 2000, max: 2, mode: 'continuous' },
+          ],
+        },
       });
     });
 
@@ -62,7 +62,7 @@ describe('routebox', function() {
         { url: '/?l=a', status: 200, left: 0 },
         { url: '/?l=a', status: 429, left: 0 },
         { url: '/?l=b', status: 200, left: 1, then: () => clock.tick(1001) },
-        { url: '/?l=a', status: 200, left: 1 }
+        { url: '/?l=a', status: 200, left: 1 },
       ]);
     };
 
@@ -70,10 +70,10 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/',
-        config: {
+        options: {
           plugins: { yaral: 'a' },
-          handler: (req, reply) => reply('ok')
-        }
+          handler: () => 'ok',
+        },
       });
 
       return testBasicLimit();
@@ -83,10 +83,10 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/',
-        config: {
+        options: {
           plugins: { yaral: ['a'] },
-          handler: (req, reply) => reply('ok')
-        }
+          handler: () => 'ok',
+        },
       });
 
       return testBasicLimit();
@@ -96,10 +96,10 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/',
-        config: {
+        options: {
           plugins: { yaral: { buckets: ['a'] } },
-          handler: (req, reply) => reply('ok')
-        }
+          handler: () => 'ok',
+        },
       });
 
       return testBasicLimit();
@@ -110,10 +110,10 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/',
-        config: {
+        options: {
           plugins: { yaral: ['b', 'a'] },
-          handler: (req, reply) => reply(res())
-        }
+          handler: (req, reply) => res(),
+        },
       });
 
       return testSequence([
@@ -124,7 +124,7 @@ describe('routebox', function() {
           left: 3,
           then: () => {
             res = () => 'ok';
-          }
+          },
         },
         { url: '/?l=a', status: 200, left: 1 },
         { url: '/?l=a', status: 200, left: 0 },
@@ -135,7 +135,7 @@ describe('routebox', function() {
           then: () => {
             clock.tick(1100);
             res = () => Boom.badRequest('400');
-          }
+          },
         },
         { url: '/?l=a', status: 400, left: 2 },
         { url: '/?l=a', status: 400, left: 1 },
@@ -146,9 +146,9 @@ describe('routebox', function() {
           left: 0,
           then: () => {
             res = () => 'ok';
-          }
+          },
         },
-        { url: '/?l=a', status: 429, left: 0 }
+        { url: '/?l=a', status: 429, left: 0 },
       ]);
     });
 
@@ -157,18 +157,18 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/',
-        config: {
+        options: {
           plugins: { yaral: ['a'] },
-          handler: (req, reply) => reply(res())
-        }
+          handler: (req, reply) => res(),
+        },
       });
 
       server.route({
         method: 'get',
         path: '/asdf',
-        config: {
-          handler: (req, reply) => reply('ok')
-        }
+        options: {
+          handler: () => 'ok',
+        },
       });
 
       return testSequence([
@@ -179,9 +179,9 @@ describe('routebox', function() {
           left: undefined,
           then: () => {
             res = () => 'ok';
-          }
+          },
         },
-        { url: '/?l=a', status: 200, left: 1 }
+        { url: '/?l=a', status: 200, left: 1 },
       ]);
     });
 
@@ -189,10 +189,10 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/',
-        config: {
+        options: {
           plugins: { yaral: { buckets: ['d'] } },
-          handler: (req, reply) => reply('ok')
-        }
+          handler: () => 'ok',
+        },
       });
 
       return testSequence([
@@ -205,7 +205,7 @@ describe('routebox', function() {
           left: 0,
           then: () => {
             clock.tick(1001);
-          }
+          },
         },
         { url: '/?l=d', status: 200, left: undefined },
         {
@@ -214,11 +214,11 @@ describe('routebox', function() {
           left: 0,
           then: () => {
             clock.tick(2001);
-          }
+          },
         },
         { url: '/?l=d', status: 200, left: undefined },
         { url: '/?l=d', status: 200, left: undefined },
-        { url: '/?l=d', status: 429, left: 0 }
+        { url: '/?l=d', status: 429, left: 0 },
       ]);
     });
   });
@@ -226,15 +226,15 @@ describe('routebox', function() {
   describe('global handlers', () => {
     beforeEach(() => {
       return server.register({
-        register: yaral,
+        plugin,
         options: {
           buckets: [
             { id, name: 'a', interval: 1000, max: 2 },
             { id, name: 'b', interval: 1500, max: 5, codes: ['4xx'] },
-            { id, name: 'c', interval: 1000, max: 2, codes: ['xxx'] }
+            { id, name: 'c', interval: 1000, max: 2, codes: ['xxx'] },
           ],
-          default: ['a']
-        }
+          default: ['a'],
+        },
       });
     });
 
@@ -243,10 +243,10 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/',
-        config: {
+        options: {
           plugins: { yaral: ['b'] },
-          handler: (req, reply) => reply(res())
-        }
+          handler: (req, reply) => res(),
+        },
       });
 
       return testSequence([
@@ -257,7 +257,7 @@ describe('routebox', function() {
           left: 3,
           then: () => {
             res = () => 'ok';
-          }
+          },
         },
         { url: '/?l=a', status: 200, left: 1 },
         { url: '/?l=a', status: 200, left: 0 },
@@ -268,7 +268,7 @@ describe('routebox', function() {
           then: () => {
             clock.tick(1100);
             res = () => Boom.badRequest('400');
-          }
+          },
         },
         { url: '/?l=a', status: 400, left: 2 },
         { url: '/?l=a', status: 400, left: 1 },
@@ -279,9 +279,9 @@ describe('routebox', function() {
           left: 0,
           then: () => {
             res = () => 'ok';
-          }
+          },
         },
-        { url: '/?l=a', status: 429, left: 0 }
+        { url: '/?l=a', status: 429, left: 0 },
       ]);
     });
 
@@ -289,10 +289,10 @@ describe('routebox', function() {
       server.route({
         method: 'get',
         path: '/asdf',
-        config: {
+        options: {
           plugins: { yaral: { enabled: false } },
-          handler: (req, reply) => reply('ok')
-        }
+          handler: () => 'ok',
+        },
       });
 
       return testSequence([{ url: '/asdf', status: 200, left: undefined }]);
@@ -302,20 +302,20 @@ describe('routebox', function() {
   it('respects disabled', () => {
     return server
       .register({
-        register: yaral,
+        plugin,
         options: {
           buckets: [{ id, name: 'a', interval: 1000, max: 2 }],
-          enabled: false
-        }
+          enabled: false,
+        },
       })
       .then(() => {
         server.route({
           method: 'get',
           path: '/',
-          config: {
+          options: {
             plugins: { yaral: ['a'] },
-            handler: (req, reply) => reply('ok')
-          }
+            handler: (req, reply) => 'ok',
+          },
         });
 
         return testSequence([{ url: '/', status: 200, left: undefined }]);
@@ -325,26 +325,26 @@ describe('routebox', function() {
   it('omits headers when requested', () => {
     return server
       .register({
-        register: yaral,
+        plugin,
         options: {
           buckets: [{ id, name: 'a', interval: 1000, max: 2 }],
-          includeHeaders: false
-        }
+          includeHeaders: false,
+        },
       })
       .then(() => {
         server.route({
           method: 'get',
           path: '/',
-          config: {
+          options: {
             plugins: { yaral: ['a'] },
-            handler: (req, reply) => reply('ok')
-          }
+            handler: (req, reply) => 'ok',
+          },
         });
 
         return testSequence([
           { url: '/?l=a', status: 200, left: undefined },
           { url: '/?l=a', status: 200, left: undefined },
-          { url: '/?l=a', status: 429, left: undefined }
+          { url: '/?l=a', status: 429, left: undefined },
         ]);
       });
   });
@@ -352,36 +352,36 @@ describe('routebox', function() {
   it('excludes requests', () => {
     return server
       .register({
-        register: yaral,
+        plugin,
         options: {
           buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 2 }],
-          exclude: req => req.query.excludeGlobal === 'true'
-        }
+          exclude: req => req.query.excludeGlobal === 'true',
+        },
       })
       .then(() => {
         server.route({
           method: 'get',
           path: '/a',
-          config: {
+          options: {
             plugins: {
               yaral: {
                 buckets: ['a'],
-                exclude: req => req.query.excludeRoute === 'true'
-              }
+                exclude: req => req.query.excludeRoute === 'true',
+              },
             },
-            handler: (req, reply) => reply('ok')
-          }
+            handler: () => 'ok',
+          },
         });
 
         server.route({
           method: 'get',
           path: '/b',
-          config: {
+          options: {
             plugins: {
-              yaral: 'a'
+              yaral: 'a',
             },
-            handler: (req, reply) => reply('ok')
-          }
+            handler: (req, reply) => 'ok',
+          },
         });
 
         return testSequence([
@@ -395,7 +395,7 @@ describe('routebox', function() {
 
           { url: '/a?excludeGlobal=true', status: 200, left: undefined },
           { url: '/b?excludeGlobal=true', status: 200, left: undefined },
-          { url: '/a?excludeRoute=true', status: 200, left: undefined }
+          { url: '/a?excludeRoute=true', status: 200, left: undefined },
         ]);
       });
   });
@@ -405,43 +405,43 @@ describe('routebox', function() {
     const onLimit = sinon.stub();
     return server
       .register({
-        register: yaral,
+        plugin,
         options: {
           onPass,
           onLimit: req => {
             onLimit(req);
             return req.query.cancel ? cancel : null;
           },
-          buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 1 }]
-        }
+          buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 1 }],
+        },
       })
       .then(() => {
         server.route({
           method: 'get',
           path: '/a',
-          config: {
+          options: {
             plugins: {
               yaral: {
-                buckets: ['a']
-              }
+                buckets: ['a'],
+              },
             },
-            handler: (req, reply) => reply('ok')
-          }
+            handler: () => 'ok',
+          },
         });
 
         return server
-          .inject({ method: 'GET', url: '/a' })
+          .inject({ app: {}, method: 'GET', url: '/a' })
           .then(res => {
             expect(res.statusCode).to.equal(200);
             expect(onPass.callCount).to.equal(1);
             expect(onLimit.callCount).to.equal(0);
-            return server.inject({ method: 'GET', url: '/a' });
+            return server.inject({ app: {}, method: 'GET', url: '/a' });
           })
           .then(res => {
             expect(res.statusCode).to.equal(429);
             expect(onPass.callCount).to.equal(1);
             expect(onLimit.callCount).to.equal(1);
-            return server.inject({ method: 'GET', url: '/a?cancel=true' });
+            return server.inject({ app: {}, method: 'GET', url: '/a?cancel=true' });
           })
           .then(res => {
             expect(res.statusCode).to.equal(200);

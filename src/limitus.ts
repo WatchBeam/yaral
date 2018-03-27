@@ -1,7 +1,6 @@
 import { PolicyAPI } from 'catbox';
 import { Server } from 'hapi';
-
-const limitus = require('limitus');
+import * as Limitus from 'limitus';
 
 /**
  * Transform the key so that Catbox won't complain about storing it.
@@ -14,21 +13,29 @@ function transformKey(key: string): { segment: string; id: string } {
  * Builds a Limitus instance set up to use the provided cache
  * policy on the server.
  */
-export function build(server: Server, policy: string): any {
-  const limitusInstance = new limitus();
+export function build(server: Server, policy: string): Limitus {
+  const limitusInstance = new Limitus();
   const cache = server.cache({ cache: policy });
   // Access of internal cache
   // Using cache directly results in errors.
   const internalCache: PolicyAPI = (<any>cache)._cache;
 
   limitusInstance.extend({
-    set(key: any, value: any, expiration: any, callback: any) {
-      internalCache.set(transformKey(key), value, expiration, callback);
+    async set(key: any, value: any, expiration: any, callback: any) {
+      try {
+        await internalCache.set(transformKey(key), value, expiration);
+        callback(null);
+      } catch (e) {
+        callback(e);
+      }
     },
-    get(key: any, callback: any) {
-      internalCache.get(transformKey(key), (err, item) => {
-        callback(err, item && item.item);
-      });
+    async get(key: any, callback: any) {
+      try {
+        const res = await internalCache.get(transformKey(key));
+        callback(null, res && (<any>res).item);
+      } catch (e) {
+        callback(e);
+      }
     },
   });
 

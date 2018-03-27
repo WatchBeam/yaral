@@ -9,14 +9,14 @@
         "strictNullChecks": false,
         "module": "commonjs",
         "sourceMap": true,
-        "target": "es6",
+        "target": "es2017",
         "outDir": "dist",
         "declaration": true,
         "lib": [
-            "es6"
+          "es2017"
         ],
-        "typeRoots": [
-            "node_modules/@types"
+        "types": [
+          "mocha"
         ]
     },
     "include": [

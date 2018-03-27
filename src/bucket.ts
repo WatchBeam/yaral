@@ -58,7 +58,7 @@ export class Bucket {
    * @param [data] from limitus.drop's callback
    */
   public headers(data: {
-    bucket: string;
+    bucket: number | string;
     count: number;
   }): {
     [key: string]: string | number;

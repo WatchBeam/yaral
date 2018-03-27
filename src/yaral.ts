@@ -1,10 +1,16 @@
-const Limitus = require('limitus');
-import { Output, tooManyRequests } from 'boom';
-import { PluginFunction, PluginRegistrationObject, ReplyWithContinue, Request, Response, Server, ServerRequestExtPoints } from 'hapi';
+import * as Boom from 'boom';
+import {
+  Lifecycle,
+  Plugin,
+  Request,
+  ResponseObject,
+  ResponseToolkit,
+  ServerRequestExtType,
+} from 'hapi';
 import * as Joi from 'joi';
+import * as Limitus from 'limitus';
 import { Bucket } from './bucket';
 import { build as buildLimitus } from './limitus';
-import { all } from './util';
 
 const schema = Joi.object()
   .keys({
@@ -27,6 +33,11 @@ const schema = Joi.object()
 declare module 'hapi' {
   export interface PluginSpecificConfiguration {
     yaral?: IYaralRouteOptions | string | string[];
+  }
+  export interface PluginsStates {
+    yaral?: IYaralInternalData & {
+      limited: boolean;
+    };
   }
 }
 
@@ -112,7 +123,7 @@ export interface IYaralOptions {
   /**
    * A Limitus instance to use for this rate limiting. Defaults to `new Limitus()`.
    */
-  limitus?: any;
+  limitus?: Limitus;
 
   /**
    * A function, called with the `request` object that returns true if the provided request should be omitted from limiting.
@@ -139,271 +150,258 @@ export interface IYaralOptions {
   /**
    * A string representing when in the request lifecycle the limit checks should occur
    */
-  event?: ServerRequestExtPoints;
+  event?: ServerRequestExtType;
 
   /**
    * JSON object containing redis-connection-timeout settings (enabled, timeout in ms)
    */
-  timeout?: { enabled: boolean; timeout: number; ontimeout?: (reply: ReplyWithContinue) => void};
+  timeout?: { enabled: boolean; timeout: number; ontimeout?: Lifecycle.Method };
 }
 
-interface IYaralInternalData {
+export interface IYaralInternalData {
   ids: (string | number | object)[];
   buckets: string[];
 }
 
-export const register: PluginFunction<IYaralOptions> = (
-  server: Server,
-  options: IYaralOptions,
-  next: () => void,
-) => {
-  options = {
-    cache: '_default',
-    enabled: true,
-    includeHeaders: true,
-    default: [],
-    exclude: () => false,
-    onLimit: () => {/*do nothing*/},
-    onPass: () => {/*do nothing*/},
-    event: 'onPreAuth',
-    //Timeout enabled by default with a value of 1000 ms. On timeout, by default we continue.
-    timeout: {
+export const plugin: Plugin<IYaralOptions> = {
+  async register(server, options) {
+    options = {
+      cache: '_default',
       enabled: true,
-      timeout: 1000,
-      ontimeout: (reply: ReplyWithContinue) => reply.continue(),
-    },
-    ...options,
-  };
-
-  Joi.assert(options, schema);
-
-  // If we aren't enabled, don't bother doing anything.
-  if (!options.enabled) {
-    return next();
-  }
-
-  const limitus = options.limitus || buildLimitus(server, options.cache);
-  const buckets: {
-    [key: string]: Bucket;
-  } = {};
-  options.buckets.forEach(bucket => {
-    const b = new Bucket(bucket, limitus);
-    buckets[b.name()] = b;
-  });
-
-  /**
-   * Returns a configuration object for the route based on its specific
-   * rules.
-   */
-  function resolveRouteOpts(
-    req: Request,
-  ): {
-    enabled: boolean;
-    buckets: string[];
-    exclude: (req: Request) => boolean;
-  } {
-    const routeOpts = req.route.settings.plugins.yaral;
-
-    const opts = {
-      enabled: true,
-      buckets: <string[]>[],
-      exclude: (_req: Request) => false,
-    };
-    if (!routeOpts) {
-      // do nothing
-    } else if (typeof routeOpts === 'string') {
-      // specifying bucket as string
-      opts.buckets = [routeOpts];
-    } else if (Array.isArray(routeOpts)) {
-      // specifying array of buckets
-      opts.buckets = routeOpts;
-    } else {
-      // providing a literal object
-      Object.assign(opts, routeOpts);
-    }
-
-    if (opts.enabled) {
-      opts.buckets = opts.buckets.concat(options.default);
-      opts.enabled =
-        !(options.exclude(req) || opts.exclude(req)) &&
-        opts.buckets.length + options.default.length > 0;
-    }
-    return opts;
-  }
-
-  /**
-   * Returns the bucket used to rate limit the specified response.
-   * @param  {Object} info
-   * @param  {Hapi.Response} res
-   * @return {Bucket}      undefined if none matching
-   */
-  const matchBucket = (
-    info: IYaralInternalData,
-    res: Response,
-  ): {
-    bucket: Bucket;
-    id: string | number | object;
-  } => {
-    for (let i = 0; i < info.buckets.length; i++) {
-      const bucket = buckets[info.buckets[i]];
-      if (bucket.matches(res.statusCode)) {
-        return { bucket: bucket, id: info.ids[i] };
-      }
-    }
-
-    return undefined;
-  };
-
-  /**
-   * Adds rate limit headers to the response if they're set.
-   */
-  const addHeaders = (res: Output | Response, headers: { [key: string]: string | number }) => {
-    if (options.includeHeaders) {
-      Object.assign(res.headers, headers);
-    }
-  };
-
-  class TimeoutError extends Error {}
-
-  const getRequestLogDetails = (err: Error, req: Request, isTimedout: boolean, duration: number) => {
-    return {
-      name: 'yaral-timeout',
-      url: req.url.href || '',
-      duration: duration,
-      success: !err,
-      properties: {
-        error: err ? err.stack : '',
-        isTimedout: isTimedout,
+      includeHeaders: true,
+      default: [],
+      exclude: () => false,
+      onLimit: () => {
+        /*do nothing*/
       },
+      onPass: () => {
+        /*do nothing*/
+      },
+      event: 'onPreAuth',
+      //Timeout enabled by default with a value of 1000 ms. On timeout, by default we continue.
+      timeout: {
+        enabled: true,
+        timeout: 1000,
+        ontimeout: (_request, reply) => reply.continue,
+      },
+      ...options,
     };
-  };
 
-  const createTimeout = (req: Request, callback: ((err: Error, data: any) => void)) => {
-    if (!options.timeout.enabled) {
-      return callback;
-    }
+    Joi.assert(options, schema);
 
-    let timeout = setTimeout(() => {
-      // handle the request timeout
-      callback(new TimeoutError('Call Timed Out'), null);
-      timeout = null;
-    }, options.timeout.timeout);
-
-    const startTime = Date.now();
-    return (err: Error, data?: any) => {
-      clearTimeout(timeout);
-      const isTimedout = timeout === null;
-      //Only log non timed-out requests if timeout is enabled. And even when timed out, still log when call actually resolves
-      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, isTimedout, Date.now() - startTime));
-      if (!isTimedout) {
-        callback(err, data);
-        timeout = null;
-      }
-    };
-  };
-
-  //Appropriately handles different types of Errors
-  const handleError = (err: Error, req: Request, reply: ReplyWithContinue) => {
-    //In case there is a redis timeout continue executing
-    //did not put it in the same block as Limitus.Rejected for the sake of future logging
-    if (err instanceof TimeoutError) {
-      options.timeout.ontimeout.call(this, reply);
-      server.log(['ratelimit', 'timeout'], getRequestLogDetails(err, req, true, options.timeout.timeout));
+    // If we aren't enabled, don't bother doing anything.
+    if (!options.enabled) {
       return;
     }
 
-    if (!(err instanceof Limitus.Rejected)) {
-      server.log(['error', 'ratelimit'], err);
-    }
-
-    // Internal errors should not halt everything.
-    reply.continue();
-  };
-
-  const rateLimitResolve = (err: Error, data: any, name: string, req: Request, reply: ReplyWithContinue, info: any) => {
-    if (!err) {
-      options.onPass(req);
-      reply.continue();
-      return;
-    }
-
-    //Internal Error or Timeout Error
-    if (!(err instanceof Limitus.Rejected)) {
-      handleError(err, req, reply);
-      return;
-    }
-
-    // Continue the request if onLimit dictates that we cancel limiting.
-    if (options.onLimit(req, data, name) === cancel) {
-      reply.continue();
-      return;
-    }
-
-    info.limited = true;
-    const res = tooManyRequests();
-    addHeaders(res.output, {
-      'X-RateLimit-Remaining': 0,
-      'X-RateLimit-Reset': data.bucket,
+    const limitus = options.limitus || buildLimitus(server, options.cache);
+    const buckets: {
+      [key: string]: Bucket;
+    } = {};
+    options.buckets.forEach(bucket => {
+      const b = new Bucket(bucket, limitus);
+      buckets[b.name()] = b;
     });
 
-    reply(res);
-    return;
-  };
+    /**
+     * Returns a configuration object for the route based on its specific
+     * rules.
+     */
+    function resolveRouteOpts(
+      req: Request,
+    ): {
+      enabled: boolean;
+      buckets: string[];
+      exclude: (req: Request) => boolean;
+    } {
+      const routeOpts = req.route.settings.plugins.yaral;
 
-  server.ext(options.event, (req, reply) => {
-    const opts = resolveRouteOpts(req);
-    if (opts.enabled === false) {
-      return reply.continue();
+      const opts = {
+        enabled: true,
+        buckets: <string[]>[],
+        exclude: (_req: Request) => false,
+      };
+      if (!routeOpts) {
+        // do nothing
+      } else if (typeof routeOpts === 'string') {
+        // specifying bucket as string
+        opts.buckets = [routeOpts];
+      } else if (Array.isArray(routeOpts)) {
+        // specifying array of buckets
+        opts.buckets = routeOpts;
+      } else {
+        // providing a literal object
+        Object.assign(opts, routeOpts);
+      }
+
+      if (opts.enabled) {
+        opts.buckets = opts.buckets.concat(options.default);
+        opts.enabled =
+          !(options.exclude(req) || opts.exclude(req)) &&
+          opts.buckets.length + options.default.length > 0;
+      }
+      return opts;
     }
 
-    const info = {
-      buckets: opts.buckets,
-      ids: opts.buckets.map(b => buckets[b].identify(req)),
-      limited: false,
+    /**
+     * Returns the bucket used to rate limit the specified response.
+     */
+    const matchBucket = (
+      info: IYaralInternalData,
+      res: ResponseObject,
+    ): {
+      bucket: Bucket;
+      id: string | number | object;
+    } => {
+      for (let i = 0; i < info.buckets.length; i++) {
+        const bucket = buckets[info.buckets[i]];
+        if (bucket.matches(res.statusCode)) {
+          return { bucket: bucket, id: info.ids[i] };
+        }
+      }
+
+      return undefined;
     };
-    req.plugins.yaral = info;
 
-    return all(
-      info.buckets.map((name, i) => {
-        return (callback: (err: Error, data?: any, name?: string) => void) => {
-          limitus.checkLimited(name, info.ids[i], createTimeout(req, (err: Error, data: any) => {
-            callback(err, data, name);
-          }));
-        };
-      }),
-      (err: Error, data: any, name: string) => {
-        rateLimitResolve(err, data, name, req, reply, info);
-      },
-    );
-  });
+    /**
+     * Adds rate limit headers to the response if they're set.
+     */
+    const addHeaders = (
+      res: Boom.Output | ResponseObject,
+      headers: { [key: string]: string | number },
+    ) => {
+      if (options.includeHeaders) {
+        Object.assign(res.headers, headers);
+      }
+    };
 
-  const preResponseResolve = (err: Error, data: any, req: Request, reply: ReplyWithContinue, opts: any, res: Response | Output) => {
-    if (err) {
-      handleError(err, req, reply);
-      return;
+    class TimeoutError extends Error {}
+
+    const getRequestLogDetails = (
+      err: Error,
+      req: Request,
+      isTimedout: boolean,
+      duration: number,
+    ) => {
+      return {
+        name: 'yaral-timeout',
+        url: req.url.href || '',
+        duration: duration,
+        success: !err,
+        properties: {
+          error: err ? err.stack : '',
+          isTimedout: isTimedout,
+        },
+      };
+    };
+
+    async function createTimeout<T>(call: () => Promise<T>, req: Request): Promise<T> {
+      const startTime = Date.now();
+      const p = call();
+      if (!options.timeout.enabled) {
+        return p;
+      }
+      try {
+        const v = await Promise.race([
+          p,
+          new Promise<never>((_res, reject) => {
+            setTimeout(() => {
+              // handle the request timeout
+              reject(new TimeoutError('Call Timed Out'));
+            }, options.timeout.timeout);
+          }),
+        ]);
+        server.log(
+          ['ratelimit', 'timeout'],
+          getRequestLogDetails(null, req, false, Date.now() - startTime),
+        );
+        return v;
+      } catch (e) {
+        server.log(
+          ['ratelimit', 'timeout'],
+          getRequestLogDetails(e, req, true, Date.now() - startTime),
+        );
+        throw e;
+      }
     }
 
-    addHeaders(res, opts.bucket.headers(data));
-    reply.continue();
-  };
+    //Appropriately handles different types of Errors
+    const handleError = (err: Error, req: Request, reply: ResponseToolkit) => {
+      //In case there is a redis timeout continue executing
+      //did not put it in the same block as Limitus.Rejected for the sake of future logging
+      if (err instanceof TimeoutError) {
+        options.timeout.ontimeout.call(this, req, reply);
+        server.log(
+          ['ratelimit', 'timeout'],
+          getRequestLogDetails(err, req, true, options.timeout.timeout),
+        );
+        // REVIEW: Bad?
+        return reply.continue;
+      }
 
-  server.ext('onPreResponse', (req, reply) => {
-    const res = req.response.output || req.response;
-    const opts = req.plugins.yaral && matchBucket(req.plugins.yaral, <Response>res);
-    if (!opts || req.plugins.yaral.limited) {
-      return reply.continue();
-    }
+      if (!(err instanceof Limitus.Rejected)) {
+        server.log(['error', 'ratelimit'], err);
+      }
 
-    return limitus.drop(opts.bucket.name(), opts.id, createTimeout(req, (err: Error, data?: any) => {
-      preResponseResolve(err, data, req, reply, opts, res);
-    }));
-  });
+      // Internal errors should not halt everything.
+      return reply.continue;
+    };
 
-  next();
-};
+    server.ext(options.event, async (req: Request, reply) => {
+      const opts = resolveRouteOpts(req);
+      if (opts.enabled === false) {
+        return reply.continue;
+      }
 
-register.attributes = { pkg: require('../package') };
+      const info = {
+        buckets: opts.buckets,
+        ids: opts.buckets.map(b => buckets[b].identify(req)),
+        limited: false,
+      };
+      req.plugins.yaral = info;
+      try {
+        await Promise.all(
+          info.buckets.map((name, i) =>
+            createTimeout(() => limitus.checkLimited(name, info.ids[i]), req),
+          ),
+        );
+        options.onPass(req);
+        return reply.continue;
+      } catch (err) {
+        //Internal Error or Timeout Error
+        if (!(err instanceof Limitus.Rejected)) {
+          return handleError(err, req, reply);
+        }
 
-export const yaral: PluginRegistrationObject<IYaralOptions> = {
-  register,
+        // Continue the request if onLimit dictates that we cancel limiting.
+        if (options.onLimit(req, err.info, err.bucketName) === cancel) {
+          return reply.continue;
+        }
+
+        info.limited = true;
+        const res = Boom.tooManyRequests();
+        addHeaders(res.output, {
+          'X-RateLimit-Remaining': 0,
+          'X-RateLimit-Reset': err.bucketName,
+        });
+        throw res;
+      }
+    });
+
+    server.ext('onPreResponse', async (req, reply) => {
+      const res = (<Boom<any>>req.response).output || <ResponseObject>req.response;
+      const opts = req.plugins.yaral && matchBucket(req.plugins.yaral, <ResponseObject>res);
+      if (!opts || req.plugins.yaral.limited) {
+        return reply.continue;
+      }
+      try {
+        const data = await createTimeout(() => limitus.drop(opts.bucket.name(), opts.id), req);
+        addHeaders(res, opts.bucket.headers(data));
+        return reply.continue;
+      } catch (err) {
+        return handleError(err, req, reply);
+      }
+    });
+  },
+  pkg: require('../package'),
 };

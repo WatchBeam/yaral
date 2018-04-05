@@ -163,6 +163,8 @@ export interface IYaralInternalData {
   buckets: string[];
 }
 
+export class TimeoutError extends Error {}
+
 export const plugin: Plugin<IYaralOptions> = {
   async register(server, options) {
     options = {
@@ -275,8 +277,6 @@ export const plugin: Plugin<IYaralOptions> = {
       }
     };
 
-    class TimeoutError extends Error {}
-
     const getRequestLogDetails = (
       err: Error,
       req: Request,
@@ -302,15 +302,13 @@ export const plugin: Plugin<IYaralOptions> = {
         return p;
       }
       try {
-        const v = await Promise.race([
-          p,
-          new Promise<never>((_res, reject) => {
-            setTimeout(() => {
-              // handle the request timeout
-              reject(new TimeoutError('Call Timed Out'));
-            }, options.timeout.timeout);
-          }),
-        ]);
+        const v = await new Promise<T>((resolve, reject) => {
+          const t = setTimeout(() => reject(new TimeoutError('Call Timed Out')), options.timeout.timeout);
+          p.then(innerV => {
+            clearTimeout(t);
+            resolve(innerV);
+          }, reject);
+        });
         server.log(
           ['ratelimit', 'timeout'],
           getRequestLogDetails(null, req, false, Date.now() - startTime),

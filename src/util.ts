@@ -7,7 +7,7 @@ export function all(
 ) {
   let todo = fns.length;
   const cb = function(err: Error) {
-    if (err) {
+    if (err && todo !== -1) {
       todo = -1;
       return callback.apply(this, arguments);
     }

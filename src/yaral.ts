@@ -328,13 +328,11 @@ export const plugin: Plugin<IYaralOptions> = {
       //In case there is a redis timeout continue executing
       //did not put it in the same block as Limitus.Rejected for the sake of future logging
       if (err instanceof TimeoutError) {
-        options.timeout.ontimeout.call(this, req, reply);
         server.log(
           ['ratelimit', 'timeout'],
           getRequestLogDetails(err, req, true, options.timeout.timeout),
         );
-        // REVIEW: Bad?
-        return reply.continue;
+        return options.timeout.ontimeout(req, reply);
       }
 
       if (!(err instanceof Limitus.Rejected)) {

@@ -1,5 +1,6 @@
 import { Request } from 'hapi';
 import * as Joi from 'joi';
+import * as Limitus from 'limitus';
 import { IBucketOptions } from './yaral';
 
 const schema = Joi.object().keys({
@@ -36,9 +37,9 @@ function codeMatches(pattern: string, code: string): boolean {
 }
 
 export class Bucket {
-  private mode: 'interval' | 'continious';
+  private mode: 'continuous' | 'interval';
 
-  constructor(private options: IBucketOptions, limitus: any) {
+  constructor(private options: IBucketOptions, limitus: Limitus) {
     options.codes = options.codes || ['2xx', '3xx'];
 
     Joi.assert(options, schema);
@@ -57,10 +58,7 @@ export class Bucket {
    * used to insert information about the limit into the response.
    * @param [data] from limitus.drop's callback
    */
-  public headers(data: {
-    bucket: string;
-    count: number;
-  }): {
+  public headers(data: Limitus.DropInfo): {
     [key: string]: string | number;
   } {
     const headers: {

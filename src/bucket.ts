@@ -65,7 +65,7 @@ export class Bucket {
       [key: string]: string | number;
     } = { 'X-Rate-Limit': this.options.max };
     if (this.mode === 'interval') {
-      headers['X-RateLimit-Remaining'] = Math.max(this.options.max - data.count, 0);
+      headers['X-RateLimit-Remaining'] = Math.max(this.options.max - data.count, 0).toString();
       headers['X-RateLimit-Reset'] = data.bucket;
     }
 

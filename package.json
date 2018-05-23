@@ -30,25 +30,25 @@
   "devDependencies": {
     "@types/boom": "^7.2.0",
     "@types/catbox": "^10.0.0",
-    "@types/chai": "^4.1.2",
-    "@types/hapi": "^17.0.7",
-    "@types/joi": "^13.0.7",
-    "@types/mocha": "^5.0.0",
+    "@types/chai": "^4.1.3",
+    "@types/hapi": "^17.0.12",
+    "@types/joi": "^13.0.8",
+    "@types/mocha": "^5.2.0",
     "catbox": "^10.0.2",
     "chai": "^4.1.2",
-    "chalk": "^2.3.2",
-    "hapi": "^17.2.3",
-    "mocha": "^5.0.5",
-    "prettier": "^1.11.1",
+    "chalk": "^2.4.1",
+    "hapi": "^17.5.0",
+    "mocha": "^5.2.0",
+    "prettier": "^1.12.1",
     "sinon": "^4.4.9",
     "ts-node": "^5.0.1",
-    "tslint": "^5.9.1",
+    "tslint": "^5.10.0",
     "tslint-microsoft-contrib": "^5.0.3",
-    "typescript": "^2.8.1"
+    "typescript": "^2.8.3"
   },
   "dependencies": {
     "boom": "^7.2.0",
-    "joi": "^13.1.2",
+    "joi": "^13.3.0",
     "limitus": "^3.0.0"
   }
 }

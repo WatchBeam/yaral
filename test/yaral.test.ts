@@ -1,9 +1,9 @@
-import { Server } from 'hapi';
+import { Request, RequestQuery, ResponseToolkit, Server } from 'hapi';
 const Boom = require('boom');
-const expect = require('chai').expect;
+import { expect } from 'chai';
 const sinon = require('sinon');
 const chalk = require('chalk');
-const { plugin, cancel } = require('../src/yaral');
+import { cancel, plugin } from '../src/yaral';
 
 describe('routebox', () => {
   let server: Server;
@@ -21,24 +21,21 @@ describe('routebox', () => {
 
   const id = req => req.query.l;
 
-  const testSequence = data => {
-    let chain = Promise.resolve();
-    data.forEach(d => {
-      chain = chain.then(() => server.inject({ app: {}, method: 'GET', url: d.url })).then(res => {
-        // tslint:disable-next-line:no-console
-        console.log(
-          '\t ' +
-            chalk.blue('<-') +
-            chalk.gray(` ${res.statusCode}, remaining: ${res.headers['x-ratelimit-remaining']}`),
-        );
-        expect(res.statusCode).to.equal(d.status);
-        expect(res.headers['x-ratelimit-remaining']).to.equal(d.left);
-        if (d.then) {
-          return d.then();
-        }
-      });
-    });
-    return chain;
+  const testSequence = async (data: { status: number; url: string; left: number; after?: () => void | Promise<void> }[]) => {
+    for (const d of data) {
+      const res = await server.inject({ app: {}, method: 'GET', url: d.url });
+      // tslint:disable-next-line:no-console
+      console.log(
+        '\t ' +
+          chalk.blue('<-') +
+          chalk.gray(` ${res.statusCode}, remaining: ${res.headers['x-ratelimit-remaining']}`),
+      );
+      expect(res.statusCode).to.equal(d.status);
+      expect(res.headers['x-ratelimit-remaining']).to.equal(d.left !== undefined ? String(d.left) : d.left);
+      if (d.after) {
+        return d.after();
+      }
+    }
   };
 
   describe('limiting functionality', () => {
@@ -61,7 +58,7 @@ describe('routebox', () => {
         { url: '/?l=a', status: 200, left: 1 },
         { url: '/?l=a', status: 200, left: 0 },
         { url: '/?l=a', status: 429, left: 0 },
-        { url: '/?l=b', status: 200, left: 1, then: () => clock.tick(1001) },
+        { url: '/?l=b', status: 200, left: 1, after: () => clock.tick(1001) },
         { url: '/?l=a', status: 200, left: 1 },
       ]);
     };
@@ -122,7 +119,7 @@ describe('routebox', () => {
           url: '/?l=a',
           status: 400,
           left: 3,
-          then: () => {
+          after: () => {
             res = () => 'ok';
           },
         },
@@ -132,7 +129,7 @@ describe('routebox', () => {
           url: '/?l=a',
           status: 429,
           left: 0,
-          then: () => {
+          after: () => {
             clock.tick(1100);
             res = () => Boom.badRequest('400');
           },
@@ -144,7 +141,7 @@ describe('routebox', () => {
           url: '/?l=a',
           status: 429,
           left: 0,
-          then: () => {
+          after: () => {
             res = () => 'ok';
           },
         },
@@ -177,7 +174,7 @@ describe('routebox', () => {
           url: '/?l=a',
           status: 400,
           left: undefined,
-          then: () => {
+          after: () => {
             res = () => 'ok';
           },
         },
@@ -203,7 +200,7 @@ describe('routebox', () => {
           url: '/?l=d',
           status: 429,
           left: 0,
-          then: () => {
+          after: () => {
             clock.tick(1001);
           },
         },
@@ -212,7 +209,7 @@ describe('routebox', () => {
           url: '/?l=d',
           status: 429,
           left: 0,
-          then: () => {
+          after: () => {
             clock.tick(2001);
           },
         },
@@ -255,7 +252,7 @@ describe('routebox', () => {
           url: '/?l=a',
           status: 400,
           left: 3,
-          then: () => {
+          after: () => {
             res = () => 'ok';
           },
         },
@@ -265,7 +262,7 @@ describe('routebox', () => {
           url: '/?l=a',
           status: 429,
           left: 0,
-          then: () => {
+          after: () => {
             clock.tick(1100);
             res = () => Boom.badRequest('400');
           },
@@ -277,7 +274,7 @@ describe('routebox', () => {
           url: '/?l=a',
           status: 429,
           left: 0,
-          then: () => {
+          after: () => {
             res = () => 'ok';
           },
         },
@@ -299,155 +296,176 @@ describe('routebox', () => {
     });
   });
 
-  it('respects disabled', () => {
-    return server
+  it('respects disabled', async () => {
+    await server
       .register({
         plugin,
         options: {
           buckets: [{ id, name: 'a', interval: 1000, max: 2 }],
           enabled: false,
         },
-      })
-      .then(() => {
-        server.route({
-          method: 'get',
-          path: '/',
-          options: {
-            plugins: { yaral: ['a'] },
-            handler: (req, reply) => 'ok',
-          },
-        });
-
-        return testSequence([{ url: '/', status: 200, left: undefined }]);
       });
+      server.route({
+        method: 'get',
+        path: '/',
+        options: {
+          plugins: { yaral: ['a'] },
+          handler: (req, reply) => 'ok',
+        },
+      });
+
+    await testSequence([{ url: '/', status: 200, left: undefined }]);
   });
 
-  it('omits headers when requested', () => {
-    return server
+  it('omits headers when requested', async () => {
+    await server
       .register({
         plugin,
         options: {
           buckets: [{ id, name: 'a', interval: 1000, max: 2 }],
           includeHeaders: false,
         },
-      })
-      .then(() => {
-        server.route({
-          method: 'get',
-          path: '/',
-          options: {
-            plugins: { yaral: ['a'] },
-            handler: (req, reply) => 'ok',
-          },
-        });
-
-        return testSequence([
-          { url: '/?l=a', status: 200, left: undefined },
-          { url: '/?l=a', status: 200, left: undefined },
-          { url: '/?l=a', status: 429, left: undefined },
-        ]);
       });
+    server.route({
+      method: 'get',
+      path: '/',
+      options: {
+        plugins: { yaral: ['a'] },
+        handler: (req, reply) => 'ok',
+      },
+    });
+
+    return testSequence([
+      { url: '/?l=a', status: 200, left: undefined },
+      { url: '/?l=a', status: 200, left: undefined },
+      { url: '/?l=a', status: 429, left: undefined },
+    ]);
   });
 
-  it('excludes requests', () => {
-    return server
+  it('excludes requests', async () => {
+    await server
       .register({
         plugin,
         options: {
           buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 2 }],
           exclude: req => req.query.excludeGlobal === 'true',
         },
-      })
-      .then(() => {
-        server.route({
-          method: 'get',
-          path: '/a',
-          options: {
-            plugins: {
-              yaral: {
-                buckets: ['a'],
-                exclude: req => req.query.excludeRoute === 'true',
-              },
-            },
-            handler: () => 'ok',
-          },
-        });
-
-        server.route({
-          method: 'get',
-          path: '/b',
-          options: {
-            plugins: {
-              yaral: 'a',
-            },
-            handler: (req, reply) => 'ok',
-          },
-        });
-
-        return testSequence([
-          { url: '/a?excludeGlobal=true', status: 200, left: undefined },
-          { url: '/b?excludeGlobal=true', status: 200, left: undefined },
-          { url: '/a?excludeRoute=true', status: 200, left: undefined },
-
-          { url: '/a?excludeRoute=false', status: 200, left: 1 },
-          { url: '/a?excludeGlobal=false', status: 200, left: 0 },
-          { url: '/b?excludeRoute=true', status: 429, left: 0 },
-
-          { url: '/a?excludeGlobal=true', status: 200, left: undefined },
-          { url: '/b?excludeGlobal=true', status: 200, left: undefined },
-          { url: '/a?excludeRoute=true', status: 200, left: undefined },
-        ]);
       });
+      server.route({
+        method: 'get',
+        path: '/a',
+        options: {
+          plugins: {
+            yaral: {
+              buckets: ['a'],
+              exclude: req => (<RequestQuery>req.query).excludeRoute === 'true',
+            },
+          },
+          handler: () => 'ok',
+        },
+      });
+
+      server.route({
+        method: 'get',
+        path: '/b',
+        options: {
+          plugins: {
+            yaral: 'a',
+          },
+          handler: (req, reply) => 'ok',
+        },
+      });
+
+      return testSequence([
+        { url: '/a?excludeGlobal=true', status: 200, left: undefined },
+        { url: '/b?excludeGlobal=true', status: 200, left: undefined },
+        { url: '/a?excludeRoute=true', status: 200, left: undefined },
+
+        { url: '/a?excludeRoute=false', status: 200, left: 1 },
+        { url: '/a?excludeGlobal=false', status: 200, left: 0 },
+        { url: '/b?excludeRoute=true', status: 429, left: 0 },
+
+        { url: '/a?excludeGlobal=true', status: 200, left: undefined },
+        { url: '/b?excludeGlobal=true', status: 200, left: undefined },
+        { url: '/a?excludeRoute=true', status: 200, left: undefined },
+      ]);
   });
 
-  it('runs callback functions', () => {
+  it('runs callback functions', async () => {
     const onPass = sinon.stub();
     const onLimit = sinon.stub();
-    return server
+    await server
       .register({
-        plugin,
+        // TODO TS freaks out
+        plugin: <any> plugin,
         options: {
           onPass,
-          onLimit: req => {
+          onLimit(req: Request) {
             onLimit(req);
-            return req.query.cancel ? cancel : null;
+            if ((<RequestQuery>req.query).cancel) {
+              return cancel;
+            }
           },
           buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 1 }],
         },
-      })
-      .then(() => {
-        server.route({
-          method: 'get',
-          path: '/a',
-          options: {
-            plugins: {
-              yaral: {
-                buckets: ['a'],
-              },
-            },
-            handler: () => 'ok',
-          },
-        });
-
-        return server
-          .inject({ app: {}, method: 'GET', url: '/a' })
-          .then(res => {
-            expect(res.statusCode).to.equal(200);
-            expect(onPass.callCount).to.equal(1);
-            expect(onLimit.callCount).to.equal(0);
-            return server.inject({ app: {}, method: 'GET', url: '/a' });
-          })
-          .then(res => {
-            expect(res.statusCode).to.equal(429);
-            expect(onPass.callCount).to.equal(1);
-            expect(onLimit.callCount).to.equal(1);
-            return server.inject({ app: {}, method: 'GET', url: '/a?cancel=true' });
-          })
-          .then(res => {
-            expect(res.statusCode).to.equal(200);
-            expect(onPass.callCount).to.equal(1);
-            expect(onLimit.callCount).to.equal(2);
-          });
       });
+    server.route({
+      method: 'get',
+      path: '/a',
+      options: {
+        plugins: {
+          yaral: {
+            buckets: ['a'],
+          },
+        },
+        handler: () => 'ok',
+      },
+    });
+
+    const res = await server.inject({ app: {}, method: 'GET', url: '/a' });
+    expect(res.statusCode).to.equal(200);
+    expect(onPass.callCount).to.equal(1);
+    expect(onLimit.callCount).to.equal(0);
+    const res2 = await server.inject({ app: {}, method: 'GET', url: '/a' });
+    expect(res2.statusCode).to.equal(429);
+    expect(onPass.callCount).to.equal(1);
+    expect(onLimit.callCount).to.equal(1);
+    const res3 = await server.inject({ app: {}, method: 'GET', url: '/a?cancel=true' });
+    expect(res3.statusCode).to.equal(200);
+    expect(onPass.callCount).to.equal(1);
+    expect(onLimit.callCount).to.equal(2);
+  });
+
+  it('allows custom responses', async () => {
+    await server
+      .register({
+        plugin,
+        options: {
+          onLimit(req, tk: ResponseToolkit, data, reset, headers) {
+            const r = tk.response('hello').code(429);
+            Object.assign(r.headers, headers);
+            return r.takeover();
+          },
+          buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 1 }],
+        },
+      });
+    server.route({
+      method: 'get',
+      path: '/a',
+      options: {
+        plugins: {
+          yaral: {
+            buckets: ['a'],
+          },
+        },
+        handler: () => 'ok',
+      },
+    });
+
+    await server.inject({ app: {}, method: 'GET', url: '/a' });
+    const res = await server.inject({ app: {}, method: 'GET', url: '/a' });
+    expect(res.statusCode).to.equal(429);
+    expect(res.payload).to.equal('hello');
+    expect(res.headers['x-ratelimit-remaining']).to.equal('0');
   });
 });

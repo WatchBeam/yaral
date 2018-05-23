@@ -5,6 +5,7 @@ import {
   Request,
   ResponseObject,
   ResponseToolkit,
+  ResponseValue,
   ServerRequestExtType,
 } from 'hapi';
 import * as Joi from 'joi';
@@ -63,7 +64,7 @@ export interface IYaralRouteOptions {
  * cancel is a symbol that can be returned from onLimit in order to abort
  * rate limiting the provided request.
  */
-export const cancel = Symbol('cancel');
+export const cancel: unique symbol = Symbol('cancel');
 
 /**
  * Describes a rate limit bucket.
@@ -82,7 +83,7 @@ export interface IBucketOptions {
    * A `mode` as described in the Limitus documentation.
    * Defaults to `interval`.
    */
-  mode: 'continuous' | 'interval';
+  mode?: 'continuous' | 'interval';
   /**
    * Function that takes a Hapi request object and returns a string, number or object that identifies the requester.
    */
@@ -140,7 +141,13 @@ export interface IYaralOptions {
    * returns when a request is made which does get rate limited.
    * You may return `yaral.cancel` from this method to cause the specific request not to be rate limited.
    */
-  onLimit?(req: Request, data: Limitus.DropInfo, name: string): Symbol | void;
+  onLimit?(
+    req: Request,
+    tk: ResponseToolkit,
+    data: Limitus.DropInfo,
+    reset: number,
+    headers: { [key: string]: string | string[] },
+  ): ResponseValue | typeof cancel | void;
 
   /**
    * is an array of interval/mode config for [Limitus](https://github.com/MCProHosting/limitus#limitusrulename-rule) intervals.
@@ -302,18 +309,13 @@ export const plugin: Plugin<IYaralOptions> = {
         return p;
       }
       try {
-        const v = await new Promise<T>((resolve, reject) => {
+        return await new Promise<T>((resolve, reject) => {
           const t = setTimeout(() => reject(new TimeoutError('Call Timed Out')), options.timeout.timeout);
           p.then(innerV => {
             clearTimeout(t);
             resolve(innerV);
           }, reject);
         });
-        server.log(
-          ['ratelimit', 'timeout'],
-          getRequestLogDetails(null, req, false, Date.now() - startTime),
-        );
-        return v;
       } catch (e) {
         server.log(
           ['ratelimit', 'timeout'],
@@ -343,10 +345,10 @@ export const plugin: Plugin<IYaralOptions> = {
       return reply.continue;
     };
 
-    server.ext(options.event, async (req: Request, reply) => {
+    server.ext(options.event, async (req, tk) => {
       const opts = resolveRouteOpts(req);
       if (opts.enabled === false) {
-        return reply.continue;
+        return tk.continue;
       }
 
       const info = {
@@ -362,24 +364,33 @@ export const plugin: Plugin<IYaralOptions> = {
           ),
         );
         options.onPass(req);
-        return reply.continue;
+        return tk.continue;
       } catch (err) {
         //Internal Error or Timeout Error
         if (!(err instanceof Limitus.Rejected)) {
-          return handleError(err, req, reply);
+          return handleError(err, req, tk);
         }
 
+        // FIXME: limitus: this is actually a number??
+        const reset: number = <any> err.bucketName;
+
+        const headers = {
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': reset.toString(),
+        };
+
         // Continue the request if onLimit dictates that we cancel limiting.
-        if (options.onLimit(req, err.info, err.bucketName) === cancel) {
-          return reply.continue;
+        const lResponse = options.onLimit(req, tk, err.info, reset, headers);
+        if (lResponse) {
+          if (lResponse === cancel) {
+            return tk.continue;
+          }
+          return lResponse;
         }
 
         info.limited = true;
         const res = Boom.tooManyRequests();
-        addHeaders(res.output, {
-          'X-RateLimit-Remaining': 0,
-          'X-RateLimit-Reset': err.bucketName,
-        });
+        addHeaders(res.output, headers);
         throw res;
       }
     });

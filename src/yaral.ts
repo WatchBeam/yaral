@@ -241,6 +241,9 @@ export const plugin: Plugin<IYaralOptions> = {
       } else {
         // providing a literal object
         Object.assign(opts, routeOpts);
+        if (typeof opts.buckets === 'string') {
+          opts.buckets = [opts.buckets];
+        }
       }
 
       if (opts.enabled) {

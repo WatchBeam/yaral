@@ -1,6 +1,6 @@
 {
   "name": "yaral",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Yet Another Rate Limit (plugin for Hapi)",
   "main": "dist/yaral.js",
   "typings": "dist/yaral.d.ts",

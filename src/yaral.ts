@@ -313,7 +313,10 @@ export const plugin: Plugin<IYaralOptions> = {
       }
       try {
         return await new Promise<T>((resolve, reject) => {
-          const t = setTimeout(() => reject(new TimeoutError('Call Timed Out')), options.timeout.timeout);
+          const t = setTimeout(
+            () => reject(new TimeoutError('Call Timed Out')),
+            options.timeout.timeout,
+          );
           p.then(innerV => {
             clearTimeout(t);
             resolve(innerV);
@@ -375,7 +378,7 @@ export const plugin: Plugin<IYaralOptions> = {
         }
 
         // FIXME: limitus: this is actually a number??
-        const reset: number = <any> err.bucketName;
+        const reset: number = <any>err.bucketName;
 
         const headers = {
           'X-RateLimit-Remaining': '0',

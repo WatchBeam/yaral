@@ -8,7 +8,7 @@
     "build": "tsc",
     "test": "mocha -r ts-node/register test/yaral.test.ts",
     "fmt": "prettier --single-quote --trailing-comma all --parser typescript --print-width 100 --write \"{src,test}/**/*.ts\"",
-    "prepublish": "npm run build",
+    "prepare": "npm run build",
     "lint:ts": "tslint -t verbose -p tsconfig.json"
   },
   "repository": {
@@ -28,27 +28,28 @@
   },
   "homepage": "https://github.com/mixer/yaral#readme",
   "devDependencies": {
-    "@types/boom": "^7.2.0",
-    "@types/catbox": "^10.0.0",
-    "@types/chai": "^4.1.3",
-    "@types/hapi": "^17.0.12",
-    "@types/joi": "^13.0.8",
-    "@types/mocha": "^5.2.0",
-    "catbox": "^10.0.2",
-    "chai": "^4.1.2",
+    "@types/boom": "^7.2.1",
+    "@types/catbox": "^10.0.2",
+    "@types/chai": "^4.1.7",
+    "@types/hapi": "^17.6.2",
+    "@types/joi": "^14.0.0",
+    "@types/mocha": "^5.2.5",
+    "@types/sinon": "^5.0.5",
+    "catbox": "^10.0.4",
+    "chai": "^4.2.0",
     "chalk": "^2.4.1",
-    "hapi": "^17.5.0",
+    "hapi": "^17.6.3",
     "mocha": "^5.2.0",
-    "prettier": "^1.12.1",
-    "sinon": "^4.4.9",
-    "ts-node": "^5.0.1",
-    "tslint": "^5.10.0",
-    "tslint-microsoft-contrib": "^5.0.3",
-    "typescript": "^2.8.3"
+    "prettier": "^1.14.3",
+    "sinon": "^7.1.1",
+    "ts-node": "^7.0.1",
+    "tslint": "^5.11.0",
+    "tslint-microsoft-contrib": "^5.2.1",
+    "typescript": "^3.1.6"
   },
   "dependencies": {
-    "boom": "^7.2.0",
-    "joi": "^13.3.0",
+    "boom": "^7.2.1",
+    "joi": "^14.0.3",
     "limitus": "^3.0.0"
   }
 }

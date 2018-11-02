@@ -1,4 +1,4 @@
-import { PolicyAPI } from 'catbox';
+import { Policy, PolicyOptionVariants } from 'catbox';
 import { Server } from 'hapi';
 import * as Limitus from 'limitus';
 
@@ -18,7 +18,7 @@ export function build(server: Server, policy: string): Limitus {
   const cache = server.cache({ cache: policy });
   // Access of internal cache
   // Using cache directly results in errors.
-  const internalCache: PolicyAPI = (<any>cache)._cache;
+  const internalCache: Policy<string, PolicyOptionVariants<string>> = (<any>cache)._cache;
 
   limitusInstance.extend({
     async set(key, value, expiration, callback) {

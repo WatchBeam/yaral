@@ -1,13 +1,14 @@
-import { Request, RequestQuery, ResponseToolkit, Server } from 'hapi';
-const Boom = require('boom');
 import { expect } from 'chai';
-const sinon = require('sinon');
+import { Request, RequestQuery, ResponseToolkit, Server } from 'hapi';
 const chalk = require('chalk');
+import * as Boom from 'boom';
+import * as sinon from 'sinon';
 import { cancel, plugin } from '../src/yaral';
+import { DropInfo } from 'limitus';
 
 describe('routebox', () => {
   let server: Server;
-  let clock;
+  let clock: sinon.SinonFakeTimers;
   beforeEach(() => {
     clock = sinon.useFakeTimers();
     server = new Server();
@@ -19,7 +20,7 @@ describe('routebox', () => {
     return server.stop();
   });
 
-  const id = req => req.query.l;
+  const id = (req: Request) => (<RequestQuery>req.query).l;
 
   const testSequence = async (data: { status: number; url: string; left: number; after?: () => void | Promise<void> }[]) => {
     for (const d of data) {
@@ -103,14 +104,14 @@ describe('routebox', () => {
     });
 
     it('uses multiple bucket correctly', () => {
-      let res = () => Boom.badRequest('400');
+      let res: () => string | Boom = () => Boom.badRequest('400');
       server.route({
         method: 'get',
         path: '/',
         options: {
           plugins: { yaral: ['b', 'a'] },
-          handler: (req, reply) => res(),
         },
+        handler: (_req, _reply) => res(),
       });
 
       return testSequence([
@@ -150,22 +151,20 @@ describe('routebox', () => {
     });
 
     it('does not limit non-matching', () => {
-      let res = () => Boom.badRequest('400');
+      let res: () => string | Boom = () => Boom.badRequest('400');
       server.route({
         method: 'get',
         path: '/',
         options: {
           plugins: { yaral: ['a'] },
-          handler: (req, reply) => res(),
         },
+        handler: (_req, _reply) => res(),
       });
 
       server.route({
         method: 'get',
         path: '/asdf',
-        options: {
-          handler: () => 'ok',
-        },
+        handler: () => 'ok',
       });
 
       return testSequence([
@@ -188,8 +187,8 @@ describe('routebox', () => {
         path: '/',
         options: {
           plugins: { yaral: { buckets: ['d'] } },
-          handler: () => 'ok',
         },
+        handler: () => 'ok',
       });
 
       return testSequence([
@@ -236,14 +235,14 @@ describe('routebox', () => {
     });
 
     it('limits correctly', () => {
-      let res = () => Boom.badRequest('400');
+      let res: () => string | Boom = () => Boom.badRequest('400');
       server.route({
         method: 'get',
         path: '/',
         options: {
           plugins: { yaral: ['b'] },
-          handler: (req, reply) => res(),
         },
+        handler: (_req, _reply) => res(),
       });
 
       return testSequence([
@@ -288,8 +287,8 @@ describe('routebox', () => {
         path: '/asdf',
         options: {
           plugins: { yaral: { enabled: false } },
-          handler: () => 'ok',
         },
+        handler: () => 'ok',
       });
 
       return testSequence([{ url: '/asdf', status: 200, left: undefined }]);
@@ -310,8 +309,8 @@ describe('routebox', () => {
         path: '/',
         options: {
           plugins: { yaral: ['a'] },
-          handler: (req, reply) => 'ok',
         },
+        handler: (_req, _reply) => 'ok',
       });
 
     await testSequence([{ url: '/', status: 200, left: undefined }]);
@@ -331,8 +330,8 @@ describe('routebox', () => {
       path: '/',
       options: {
         plugins: { yaral: ['a'] },
-        handler: (req, reply) => 'ok',
       },
+      handler: (_req, _reply) => 'ok',
     });
 
     return testSequence([
@@ -348,7 +347,7 @@ describe('routebox', () => {
         plugin,
         options: {
           buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 2 }],
-          exclude: req => req.query.excludeGlobal === 'true',
+          exclude: (req: Request) => (<RequestQuery>req.query).excludeGlobal === 'true',
         },
       });
       server.route({
@@ -361,8 +360,8 @@ describe('routebox', () => {
               exclude: req => (<RequestQuery>req.query).excludeRoute === 'true',
             },
           },
-          handler: () => 'ok',
         },
+        handler: () => 'ok',
       });
 
       server.route({
@@ -372,7 +371,7 @@ describe('routebox', () => {
           plugins: {
             yaral: 'a',
           },
-          handler: (req, reply) => 'ok',
+          handler: (_req, _reply) => 'ok',
         },
       });
 
@@ -441,7 +440,9 @@ describe('routebox', () => {
       .register({
         plugin,
         options: {
-          onLimit(req, tk: ResponseToolkit, data, reset, headers) {
+          onLimit(_req: Request, tk: ResponseToolkit, _data: DropInfo, _reset: number, headers: {
+            [key: string]: string | string[];
+          }) {
             const r = tk.response('hello').code(429);
             Object.assign(r.headers, headers);
             return r.takeover();
@@ -458,8 +459,8 @@ describe('routebox', () => {
             buckets: ['a'],
           },
         },
-        handler: () => 'ok',
       },
+      handler: () => 'ok',
     });
 
     await server.inject({ app: {}, method: 'GET', url: '/a' });

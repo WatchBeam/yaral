@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import { Request, RequestQuery, ResponseToolkit, Server } from 'hapi';
+import { Request, RequestQuery, ResponseToolkit, Server } from '@hapi/hapi';
 const chalk = require('chalk');
-import * as Boom from 'boom';
+import * as Boom from '@hapi/boom';
 import { DropInfo } from 'limitus';
 import * as sinon from 'sinon';
 import { cancel, plugin } from '../src/yaral';

@@ -28,17 +28,17 @@
   },
   "homepage": "https://github.com/mixer/yaral#readme",
   "devDependencies": {
-    "@types/boom": "^7.2.1",
-    "@types/catbox": "^10.0.2",
+    "@hapi/catbox": "^10.2.1",
+    "@hapi/hapi": "^18.3.1",
     "@types/chai": "^4.1.7",
-    "@types/hapi": "^17.6.2",
-    "@types/joi": "^14.0.0",
+    "@types/hapi__boom": "^7.4.0",
+    "@types/hapi__catbox": "^10.2.0",
+    "@types/hapi__hapi": "^18.2.1",
+    "@types/hapi__joi": "^15.0.1",
     "@types/mocha": "^5.2.5",
     "@types/sinon": "^5.0.5",
-    "catbox": "^10.0.4",
     "chai": "^4.2.0",
     "chalk": "^2.4.1",
-    "hapi": "^17.6.3",
     "mocha": "^5.2.0",
     "prettier": "^1.14.3",
     "sinon": "^7.1.1",
@@ -48,8 +48,8 @@
     "typescript": "^3.1.6"
   },
   "dependencies": {
-    "boom": "^7.2.1",
-    "joi": "^14.0.3",
+    "@hapi/boom": "^7.4.2",
+    "@hapi/joi": "^15.0.2",
     "limitus": "^3.0.0"
   }
 }

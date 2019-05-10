@@ -1,5 +1,5 @@
-import { Policy, PolicyOptionVariants } from 'catbox';
-import { Server } from 'hapi';
+import { Policy, PolicyOptionVariants } from '@hapi/catbox';
+import { Server } from '@hapi/hapi';
 import * as Limitus from 'limitus';
 
 /**

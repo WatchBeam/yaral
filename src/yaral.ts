@@ -1,4 +1,4 @@
-import * as Boom from 'boom';
+import * as Boom from '@hapi/boom';
 import {
   Lifecycle,
   Plugin,
@@ -7,8 +7,8 @@ import {
   ResponseToolkit,
   ResponseValue,
   ServerRequestExtType,
-} from 'hapi';
-import * as Joi from 'joi';
+} from '@hapi/hapi';
+import * as Joi from '@hapi/joi';
 import * as Limitus from 'limitus';
 import { Bucket } from './bucket';
 import { build as buildLimitus } from './limitus';
@@ -31,7 +31,7 @@ const schema = Joi.object()
   })
   .required();
 
-declare module 'hapi' {
+declare module '@hapi/hapi' {
   export interface PluginSpecificConfiguration {
     yaral?: IYaralRouteOptions | string | string[];
   }

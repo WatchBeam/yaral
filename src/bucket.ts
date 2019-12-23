@@ -1,5 +1,5 @@
-import { Request } from 'hapi';
-import * as Joi from 'joi';
+import { Request } from '@hapi/hapi';
+import * as Joi from '@hapi/joi';
 import * as Limitus from 'limitus';
 import { IBucketOptions } from './yaral';
 

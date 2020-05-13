@@ -1,5 +1,5 @@
+import { Request, ResponseToolkit, Server } from '@hapi/hapi';
 import { expect } from 'chai';
-import { Request, RequestQuery, ResponseToolkit, Server } from '@hapi/hapi';
 const chalk = require('chalk');
 import * as Boom from '@hapi/boom';
 import { DropInfo } from 'limitus';
@@ -20,7 +20,7 @@ describe('routebox', () => {
     return server.stop();
   });
 
-  const id = (req: Request) => (<RequestQuery>req.query).l;
+  const id = (req: Request) => req.query.l;
 
   const testSequence = async (
     data: { status: number; url: string; left: number; after?: () => void | Promise<void> }[],
@@ -348,7 +348,7 @@ describe('routebox', () => {
       plugin,
       options: {
         buckets: [{ id: () => 42, name: 'a', interval: 1000, max: 2 }],
-        exclude: (req: Request) => (<RequestQuery>req.query).excludeGlobal === 'true',
+        exclude: (req: Request) => req.query.excludeGlobal === 'true',
       },
     });
     server.route({
@@ -358,7 +358,7 @@ describe('routebox', () => {
         plugins: {
           yaral: {
             buckets: ['a'],
-            exclude: req => (<RequestQuery>req.query).excludeRoute === 'true',
+            exclude: req => req.query.excludeRoute === 'true',
           },
         },
       },
@@ -401,7 +401,7 @@ describe('routebox', () => {
         onPass,
         onLimit(req: Request) {
           onLimit(req);
-          if ((<RequestQuery>req.query).cancel) {
+          if (req.query.cancel) {
             return cancel;
           }
           return undefined;

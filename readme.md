@@ -31,10 +31,14 @@ The following options are available when you register Yaral:
  - `onPass` is a function called with the `request` object with a successful request is made which is not rate limited.
  - `onLimit` is a function called with the `request` object, `rule` name that failed, and extra `data` that rule returns when a request is made which does get rate limited. You may return `yaral.cancel` from this method to cause the specific request not to be rate limited.
  - `event` is a string identifying when the initial checks will happen, valid valus are `onRequest`, `onPreAuth`, `onPostAuth`
- 
+
 You can also configure options on a per-route basis in `config.plugins.yaral`:
  - `buckets` specifies the bucket `name` or array of of the rate limit buckets to use in addition to the configured `default` rules. Buckets are matched first to last.
  - `enabled` is a boolean which allows you to override a true `enabled` global configuration. This can be used to exclude routes from global rate limits. Defaults to `true`.
  - `exclude` functions similarly to the `exclude` above. If both a route-level and a global exclude passed, the request will be excluded if _either_ return true.
 
 Alternately, for routes, you can specify a single string or array as a shorthand for buckets.
+
+### Changelog
+
+- *4.0.0* - Change hapi namespace to @hapi/hapi
